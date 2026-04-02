@@ -21,14 +21,51 @@ const exportExcelBtn = document.getElementById('exportExcelBtn');
 const exportDataBtn = document.getElementById('exportDataBtn');
 const importDataBtn = document.getElementById('importDataBtn');
 const importDataFile = document.getElementById('importDataFile');
+const currencySelect = document.getElementById('currencySelect');
 
 let extraSequence = 0;
 
-const currencyFormatter = new Intl.NumberFormat('es-DO', {
-  style: 'currency',
-  currency: 'DOP',
-  maximumFractionDigits: 0
-});
+/**
+ * Monedas disponibles. UF usa código ISO CLF (Unidad de Fomento, Chile) para Intl.
+ * @type {ReadonlyArray<{ id: string, code: string, label: string, locale: string }>}
+ */
+const CURRENCIES = Object.freeze([
+  { id: 'DOP', code: 'DOP', label: 'DOP — Peso dominicano', locale: 'es-DO' },
+  { id: 'USD', code: 'USD', label: 'USD — Dólar estadounidense', locale: 'en-US' },
+  { id: 'UF', code: 'CLF', label: 'UF — Unidad de fomento (Chile)', locale: 'es-CL' },
+  { id: 'CLP', code: 'CLP', label: 'CLP — Peso chileno', locale: 'es-CL' }
+]);
+
+const ALLOWED_CURRENCY_IDS = new Set(CURRENCIES.map((c) => c.id));
+
+/** @type {Record<string, Intl.NumberFormat>} */
+const currencyFormatterCache = {};
+
+/**
+ * @param {string} currencyId
+ * @return {typeof CURRENCIES[number]}
+ */
+function getCurrencyById(currencyId) {
+  return CURRENCIES.find((c) => c.id === currencyId) || CURRENCIES[0];
+}
+
+/**
+ * @param {typeof CURRENCIES[number]} currency
+ * @return {Intl.NumberFormat}
+ */
+function getCurrencyFormatter(currency) {
+  const key = currency.id;
+  if (!currencyFormatterCache[key]) {
+    const isUf = currency.code === 'CLF';
+    currencyFormatterCache[key] = new Intl.NumberFormat(currency.locale, {
+      style: 'currency',
+      currency: currency.code,
+      minimumFractionDigits: isUf ? 2 : 0,
+      maximumFractionDigits: isUf ? 4 : 0
+    });
+  }
+  return currencyFormatterCache[key];
+}
 
 /**
  * Formats a currency value
@@ -37,8 +74,17 @@ const currencyFormatter = new Intl.NumberFormat('es-DO', {
  * @return {*} 
  */
 function formatCurrency(value) {
-  return currencyFormatter.format(Number.isFinite(value) ? value : 0);
+  const cur = getCurrencyById(currencySelect.value);
+  return getCurrencyFormatter(cur).format(Number.isFinite(value) ? value : 0);
 }
+
+CURRENCIES.forEach((c) => {
+  const opt = document.createElement('option');
+  opt.value = c.id;
+  opt.textContent = c.label;
+  currencySelect.appendChild(opt);
+});
+currencySelect.value = 'DOP';
 
 /**
  * Formats a number
@@ -391,7 +437,8 @@ function buildLoanDataPayload() {
     loan: {
       principal,
       annualRatePercent: annualRate,
-      termYears: years
+      termYears: years,
+      currencyId: getCurrencyById(currencySelect.value).id
     },
     extras: extras.map((e) => ({
       month: e.month,
@@ -438,6 +485,15 @@ function validateLoanImportPayload(raw) {
   }
   if (!Number.isFinite(termYears) || termYears < 1 || Math.floor(termYears) !== termYears) {
     errors.push('El plazo en años debe ser un entero mayor o igual a 1.');
+  }
+
+  let currencyId = 'DOP';
+  if (loan.currencyId !== undefined && loan.currencyId !== null) {
+    if (typeof loan.currencyId !== 'string' || !ALLOWED_CURRENCY_IDS.has(loan.currencyId)) {
+      errors.push('La moneda debe ser DOP, USD, UF o CLP.');
+    } else {
+      currencyId = loan.currencyId;
+    }
   }
 
   if (errors.length) return { ok: false, errors };
@@ -487,7 +543,8 @@ function validateLoanImportPayload(raw) {
     loan: {
       principal,
       annualRatePercent,
-      termYears: Math.floor(termYears)
+      termYears: Math.floor(termYears),
+      currencyId
     },
     extras: normalizedExtras
   };
@@ -522,6 +579,9 @@ function applyImportedLoan(loan, extras) {
   loanAmountInput.value = String(loan.principal);
   annualRateInput.value = String(loan.annualRatePercent);
   termYearsInput.value = String(loan.termYears);
+  if (loan.currencyId && ALLOWED_CURRENCY_IDS.has(loan.currencyId)) {
+    currencySelect.value = loan.currencyId;
+  }
   extrasList.innerHTML = '';
   extras.forEach((e) => {
     addExtraRow(
@@ -830,6 +890,7 @@ importDataFile.addEventListener('change', handleImportFileChange);
 loanAmountInput.addEventListener('input', render);
 annualRateInput.addEventListener('input', render);
 termYearsInput.addEventListener('input', render);
+currencySelect.addEventListener('change', render);
 
 //ADD DEFAULT EXTRA ROWS HERE IF NEEDED
 //addExtraRow({ month: 1, amount: 70000, strategy: 'reduce_term' });
