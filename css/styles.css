@@ -317,10 +317,25 @@
   }
 
   .table-toolbar-actions {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 12px;
+    flex: 1;
+    min-width: min(100%, 280px);
+  }
+
+  .table-row-count {
+    justify-self: start;
+  }
+
+  .table-toolbar-export {
     display: flex;
     align-items: center;
     gap: 12px;
     flex-wrap: wrap;
+    justify-self: end;
+    justify-content: flex-end;
   }
 
   .table-wrap {
@@ -522,12 +537,15 @@
 
     .table-toolbar-actions {
       align-self: stretch;
-      justify-content: space-between;
       width: 100%;
     }
 
-    .table-toolbar-actions .btn,
-    .table-toolbar-actions .btn-secondary {
+    .table-toolbar-export {
+      min-width: 0;
+    }
+
+    .table-toolbar-export .btn,
+    .table-toolbar-export .btn-secondary {
       flex: 1;
       min-height: 44px;
     }
