@@ -628,12 +628,26 @@
     }
 
     .table-toolbar-actions {
+      display: flex;
+      flex-direction: column;
+      align-items: stretch;
+      gap: 10px;
       align-self: stretch;
       width: 100%;
+      min-width: 0;
     }
 
     .table-toolbar-export {
+      order: -1;
       min-width: 0;
+      width: 100%;
+      justify-content: stretch;
+    }
+
+    .table-row-count {
+      align-self: flex-end;
+      text-align: right;
+      width: 100%;
     }
 
     .table-toolbar-export .btn,
