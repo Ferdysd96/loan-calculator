@@ -402,3 +402,7 @@ termYearsInput.addEventListener('input', render);
 //ADD DEFAULT EXTRA ROWS HERE IF NEEDED
 //addExtraRow({ month: 1, amount: 70000, strategy: 'reduce_term' });
 render();
+
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('/service-worker.js');
+}
