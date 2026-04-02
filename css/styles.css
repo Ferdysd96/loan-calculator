@@ -298,12 +298,20 @@
   .table-wrap {
     max-height: 620px;
     overflow: auto;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-x: contain;
+    border-radius: 0 0 var(--radius) var(--radius);
+    margin: 0 -1px;
+  }
+
+  .table-wrap:focus-within {
+    outline: none;
   }
 
   table {
     width: 100%;
     border-collapse: collapse;
-    min-width: 760px;
+    min-width: 640px;
   }
 
   thead th {
@@ -398,20 +406,175 @@
     .side-panel {
       position: static;
     }
+
+    .table-panel {
+      margin-top: 16px;
+    }
+
+    .input-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
   }
 
   @media (max-width: 760px) {
+    .container {
+      padding: 20px 14px 32px;
+    }
+
+    .header {
+      margin-bottom: 18px;
+    }
+
+    .panel {
+      padding: 18px 16px;
+    }
+
     .input-grid,
     .cards,
     .summary-list {
       grid-template-columns: 1fr;
     }
 
+    .extras-box {
+      padding: 14px;
+    }
+
+    .extras-head {
+      flex-direction: column;
+      align-items: stretch;
+    }
+
+    .extras-head > div:last-child {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .extras-head .btn-secondary {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 100%;
+      min-height: 44px;
+    }
+
     .extra-row {
       grid-template-columns: 1fr;
+      gap: 12px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid rgba(91, 112, 255, 0.15);
+    }
+
+    .extra-row:last-of-type {
+      border-bottom: none;
+      padding-bottom: 0;
+    }
+
+    .extra-row .icon-btn {
+      justify-self: start;
+    }
+
+    .table-toolbar {
+      flex-direction: column;
+      align-items: flex-start;
+      padding: 14px 16px;
+    }
+
+    .table-toolbar #tableSummary {
+      align-self: flex-end;
     }
 
     .table-wrap {
-      max-height: none;
+      max-height: min(70vh, 520px);
+      border-radius: 0;
+    }
+
+    .table-panel {
+      padding: 0;
+      overflow: hidden;
+    }
+
+    .table-panel .table-toolbar {
+      padding-left: 16px;
+      padding-right: 16px;
+    }
+
+    .card-value {
+      font-size: clamp(1.35rem, 6vw, 1.85rem);
+      word-break: break-word;
+    }
+  }
+
+  @media (max-width: 480px) {
+    .container {
+      padding: 16px 12px 28px;
+      padding-left: max(12px, env(safe-area-inset-left));
+      padding-right: max(12px, env(safe-area-inset-right));
+      padding-bottom: max(28px, env(safe-area-inset-bottom));
+    }
+
+    .header h1 {
+      font-size: 1.45rem;
+    }
+
+    .header p {
+      font-size: 0.92rem;
+      line-height: 1.45;
+    }
+
+    .panel {
+      padding: 14px 12px;
+      border-radius: 14px;
+    }
+
+    .section-title {
+      font-size: 0.82rem;
+    }
+
+    input,
+    select {
+      padding: 12px 14px;
+      font-size: 16px;
+      border-radius: 12px;
+    }
+
+    .extras-box {
+      padding: 12px;
+      border-radius: 14px;
+    }
+
+    .formula-box {
+      padding: 12px;
+    }
+
+    .formula-box code {
+      font-size: 0.85rem;
+    }
+
+    table {
+      min-width: 560px;
+    }
+
+    thead th {
+      padding: 10px 12px;
+      font-size: 0.82rem;
+    }
+
+    tbody td {
+      padding: 10px 12px;
+      font-size: 0.88rem;
+    }
+
+    .table-panel .table-toolbar {
+      padding-left: 12px;
+      padding-right: 12px;
+    }
+
+    .summary-list li {
+      padding: 12px;
+    }
+
+    .mini-note {
+      font-size: 0.85rem;
     }
   }
