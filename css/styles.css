@@ -316,6 +316,13 @@
     margin: 0;
   }
 
+  .table-toolbar-actions {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+
   .table-wrap {
     max-height: 620px;
     overflow: auto;
@@ -513,8 +520,16 @@
       padding: 14px 16px;
     }
 
-    .table-toolbar #tableSummary {
-      align-self: flex-end;
+    .table-toolbar-actions {
+      align-self: stretch;
+      justify-content: space-between;
+      width: 100%;
+    }
+
+    .table-toolbar-actions .btn,
+    .table-toolbar-actions .btn-secondary {
+      flex: 1;
+      min-height: 44px;
     }
 
     .table-wrap {

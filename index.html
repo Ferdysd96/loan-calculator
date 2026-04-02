@@ -92,7 +92,11 @@
               <h2 class="section-title" style="margin-bottom:6px;">Tabla de amortización</h2>
               <p class="mini-note">Los abonos extraordinarios se aplican directamente a capital y actualizan la proyección en tiempo real.</p>
             </div>
-            <div class="mini-note" id="tableSummary">0 filas</div>
+            <div class="table-toolbar-actions">
+              <button class="btn" id="exportPdfBtn" type="button">Exportar PDF</button>
+              <button class="btn-secondary" id="exportExcelBtn" type="button">Exportar Excel</button>
+              <span class="mini-note" id="tableSummary">0 filas</span>
+            </div>
           </div>
 
           <div class="table-wrap">
@@ -150,6 +154,8 @@
     </div>
   </template>
 
+  <script src="js/vendor/jspdf.umd.min.js"></script>
+  <script src="js/vendor/jspdf.plugin.autotable.min.js"></script>
   <script src="js/main.js"></script>
 </body>
 </html>
