@@ -37,19 +37,30 @@
             </div>
           </div>
 
+          <div class="scenario-bar">
+            <details class="scenario-details">
+              <summary class="scenario-summary">Mis simulaciones</summary>
+              <div class="scenario-body">
+                <p class="scenario-help">Guarda tu simulación en un archivo o carga una previamente guardada. Incluye monto, tasa, plazo y abonos extraordinarios.</p>
+                <div class="scenario-actions">
+                  <button class="btn-secondary" id="exportDataBtn" type="button" title="Descargar escenario como archivo JSON">Guardar simulación</button>
+                  <button class="btn-secondary" id="importDataBtn" type="button" title="Cargar escenario desde un archivo JSON">Cargar simulación</button>
+                </div>
+              </div>
+            </details>
+            <input type="file" id="importDataFile" accept=".json,application/json" hidden />
+          </div>
+
           <div class="extras-box">
             <div class="extras-head">
               <div>
                 <h3 class="section-title" style="margin-bottom: 6px;">Programar abonos extraordinarios</h3>
                 <p class="extras-help">Cada fila permite elegir el mes, monto y estrategia. Si agregas varios abonos en el mismo mes, se aplican en el orden mostrado.</p>
               </div>
-              <div style="display:flex; gap:10px; flex-wrap:wrap;">
+              <div class="extras-actions">
                 <button class="btn-secondary" id="addExtraBtn" type="button">+ Agregar abono extra</button>
                 <button class="btn-secondary" id="clearExtrasBtn" type="button">Limpiar abonos</button>
-                <button class="btn-secondary" id="exportDataBtn" type="button" title="Guardar escenario en un archivo JSON">Exportar datos</button>
-                <button class="btn-secondary" id="importDataBtn" type="button" title="Cargar un escenario desde archivo JSON">Importar datos</button>
               </div>
-              <input type="file" id="importDataFile" accept=".json,application/json" hidden />
             </div>
 
             <div class="extras-list" id="extrasList"></div>

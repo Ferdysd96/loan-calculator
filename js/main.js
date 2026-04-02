@@ -496,7 +496,7 @@ function validateLoanImportPayload(raw) {
 function exportLoanDataJson() {
   const payload = buildLoanDataPayload();
   if (!payload) {
-    alert('Completa los datos del préstamo (monto y plazo válidos) para exportar.');
+    alert('Completa los datos del préstamo (monto y plazo válidos) para guardar el escenario.');
     return;
   }
 
@@ -549,7 +549,7 @@ function handleImportFileChange(event) {
 
     const result = validateLoanImportPayload(parsed);
     if (!result.ok) {
-      alert(`No se pudo importar:\n\n${result.errors.join('\n')}`);
+      alert(`No se pudo cargar el escenario:\n\n${result.errors.join('\n')}`);
       return;
     }
 
