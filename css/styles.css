@@ -382,6 +382,10 @@
   }
 
   @media (min-width: 981px) {
+    .container {
+      max-width: 1680px;
+    }
+
     .table-wrap {
       max-height: 720px;
     }
