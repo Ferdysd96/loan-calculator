@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Calculadora de amortización</title>
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>Calculadora de amortización</h1>
+      <p>Calcula la cuota mensual, agrega abonos extraordinarios y mezcla estrategias por mes para ver cómo cambia el préstamo.</p>
+    </div>
+
+    <div class="grid">
+      <div>
+        <section class="panel">
+          <h2 class="section-title">Datos del préstamo</h2>
+
+          <div class="input-grid">
+            <div>
+              <label for="loanAmount">Monto del préstamo</label>
+              <input id="loanAmount" type="number" min="0" step="0.01" value="3800000" />
+            </div>
+
+            <div>
+              <label for="annualRate">Tasa de interés anual (%)</label>
+              <input id="annualRate" type="number" min="0" step="0.01" value="12.5" />
+            </div>
+
+            <div>
+              <label for="termYears">Plazo (años)</label>
+              <input id="termYears" type="number" min="1" step="1" value="20" />
+            </div>
+          </div>
+
+          <div class="extras-box">
+            <div class="extras-head">
+              <div>
+                <h3 class="section-title" style="margin-bottom: 6px;">Programar abonos extraordinarios</h3>
+                <p class="extras-help">Cada fila permite elegir el mes, monto y estrategia. Si agregas varios abonos en el mismo mes, se aplican en el orden mostrado.</p>
+              </div>
+              <div style="display:flex; gap:10px; flex-wrap:wrap;">
+                <button class="btn-secondary" id="addExtraBtn" type="button">+ Agregar abono extra</button>
+                <button class="btn-secondary" id="clearExtrasBtn" type="button">Limpiar abonos</button>
+              </div>
+            </div>
+
+            <div class="extras-list" id="extrasList"></div>
+          </div>
+
+          <div class="cards">
+            <article class="card soft">
+              <p class="card-label">Cuota mensual base</p>
+              <p class="card-value" id="standardPayment">RD$0</p>
+            </article>
+
+            <article class="card success">
+              <p class="card-label">Ahorro estimado en intereses</p>
+              <p class="card-value" id="interestSaved">RD$0</p>
+            </article>
+          </div>
+
+          <ul class="summary-list">
+            <li>
+              <span>Meses estimados</span>
+              <strong id="estimatedMonths">0</strong>
+            </li>
+            <li>
+              <span>Meses ahorrados</span>
+              <strong id="monthsSaved">0</strong>
+            </li>
+            <li>
+              <span>Intereses totales</span>
+              <strong id="totalInterest">RD$0</strong>
+            </li>
+            <li>
+              <span>Total pagado</span>
+              <strong id="totalPaid">RD$0</strong>
+            </li>
+          </ul>
+
+          <div class="warning" id="warningBox"></div>
+        </section>
+
+        <section class="panel table-panel">
+          <div class="table-toolbar">
+            <div>
+              <h2 class="section-title" style="margin-bottom:6px;">Tabla de amortización</h2>
+              <p class="mini-note">Los abonos extraordinarios se aplican directamente a capital y actualizan la proyección en tiempo real.</p>
+            </div>
+            <div class="mini-note" id="tableSummary">0 filas</div>
+          </div>
+
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Mes</th>
+                  <th>Cuota</th>
+                  <th>Interés</th>
+                  <th>Capital</th>
+                  <th>Saldo pendiente</th>
+                </tr>
+              </thead>
+              <tbody id="amortizationBody"></tbody>
+            </table>
+            <div class="empty-state" id="emptyState" style="display:none;">Completa los datos del préstamo para ver la tabla de amortización.</div>
+          </div>
+        </section>
+      </div>
+
+      <aside class="panel side-panel">
+        <h2 class="section-title">Cómo funciona</h2>
+        <ul class="legend">
+          <li><strong>Reducir plazo:</strong> mantiene la cuota base y acorta la duración del préstamo.</li>
+          <li><strong>Reducir cuota:</strong> mantiene el plazo restante y recalcula una cuota menor para los meses futuros.</li>
+          <li>Las estrategias se aplican después de la cuota normal del mes y después del abono extraordinario.</li>
+          <li>Si el préstamo se liquida antes, los abonos programados para meses posteriores se ignoran.</li>
+        </ul>
+
+        <div class="formula-box">
+          <p class="section-title" style="margin-bottom:10px;">Fórmula base</p>
+          <code>Cuota = P × i / (1 - (1 + i)^-n)</code>
+          <div class="small-note">P = principal, i = tasa mensual, n = número de meses.</div>
+        </div>
+
+        <div class="formula-box">
+          <p class="section-title" style="margin-bottom:10px;">Sugerencia</p>
+          <div class="small-note" style="margin-top:0;">
+            Para estrategias mixtas, programa distintos meses con distintas opciones. Ejemplo: en el mes 6 reducir cuota, y en el mes 12 reducir plazo.
+          </div>
+        </div>
+      </aside>
+    </div>
+  </div>
+
+  <template id="extraRowTemplate">
+    <div class="extra-row">
+      <select class="extra-month" aria-label="Mes del abono"></select>
+      <input class="extra-amount" type="number" min="0" step="0.01" placeholder="Monto del abono" aria-label="Monto del abono" />
+      <select class="extra-strategy" aria-label="Estrategia del abono">
+        <option value="reduce_term">Reducir plazo</option>
+        <option value="reduce_payment">Reducir cuota</option>
+      </select>
+      <button class="icon-btn remove-extra" type="button" title="Eliminar">×</button>
+    </div>
+  </template>
+
+  <script src="js/main.js"></script>
+</body>
+</html>
