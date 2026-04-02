@@ -28,6 +28,8 @@
     max-width: 1180px;
     margin: 0 auto;
     padding: 28px 18px 40px;
+    min-width: 0;
+    width: 100%;
   }
 
   .header {
@@ -51,6 +53,11 @@
     grid-template-columns: 1.15fr 0.85fr;
     gap: 20px;
     align-items: start;
+    min-width: 0;
+  }
+
+  .grid > * {
+    min-width: 0;
   }
 
   .panel,
@@ -302,6 +309,8 @@
     overscroll-behavior-x: contain;
     border-radius: 0 0 var(--radius) var(--radius);
     margin: 0 -1px;
+    min-width: 0;
+    width: 100%;
   }
 
   .table-wrap:focus-within {
