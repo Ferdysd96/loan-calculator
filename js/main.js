@@ -18,6 +18,9 @@ const emptyState = document.getElementById('emptyState');
 const tableSummary = document.getElementById('tableSummary');
 const exportPdfBtn = document.getElementById('exportPdfBtn');
 const exportExcelBtn = document.getElementById('exportExcelBtn');
+const exportDataBtn = document.getElementById('exportDataBtn');
+const importDataBtn = document.getElementById('importDataBtn');
+const importDataFile = document.getElementById('importDataFile');
 
 let extraSequence = 0;
 
@@ -136,7 +139,11 @@ function findNextAvailableMonth() {
  * @param {*} data
  * @return {*} 
  */
-function addExtraRow(data = {}) {
+/**
+ * @param {object} data
+ * @param {{ skipRender?: boolean }} [options]
+ */
+function addExtraRow(data = {}, options = {}) {
   const clone = template.content.firstElementChild.cloneNode(true);
   let nextAvailableMonth = 1;
   clone.dataset.id = String(++extraSequence);
@@ -163,7 +170,7 @@ function addExtraRow(data = {}) {
   });
 
   extrasList.appendChild(clone);
-  render();
+  if (!options.skipRender) render();
 }
 
 /**
@@ -360,6 +367,198 @@ function buildExportScenario() {
   const baseline = simulateLoan({ principal, annualRate, years, extras: [] });
   const scenario = simulateLoan({ principal, annualRate, years, extras });
   return { principal, annualRate, years, extras, baseline, scenario };
+}
+
+const LOAN_DATA_FORMAT = 'loan-calculator-scenario';
+const LOAN_DATA_VERSION = 1;
+const ALLOWED_STRATEGIES = new Set(['reduce_term', 'reduce_payment']);
+
+/**
+ * Serializa el escenario actual para archivo JSON (importación posterior).
+ *
+ * @return {object|null}
+ */
+function buildLoanDataPayload() {
+  const principal = Math.max(0, toNumber(loanAmountInput.value));
+  const annualRate = Math.max(0, toNumber(annualRateInput.value));
+  const years = Math.max(1, Math.floor(toNumber(termYearsInput.value)));
+  const extras = collectExtras();
+  if (principal <= 0 || years <= 0) return null;
+  return {
+    format: LOAN_DATA_FORMAT,
+    version: LOAN_DATA_VERSION,
+    exportedAt: new Date().toISOString(),
+    loan: {
+      principal,
+      annualRatePercent: annualRate,
+      termYears: years
+    },
+    extras: extras.map((e) => ({
+      month: e.month,
+      amount: e.amount,
+      strategy: e.strategy
+    }))
+  };
+}
+
+/**
+ * Valida un objeto importado y devuelve datos listos para aplicar al formulario.
+ *
+ * @param {*} raw
+ * @return {{ ok: true, loan: object, extras: Array } | { ok: false, errors: string[] }}
+ */
+function validateLoanImportPayload(raw) {
+  const errors = [];
+  if (raw === null || typeof raw !== 'object' || Array.isArray(raw)) {
+    return { ok: false, errors: ['El archivo no contiene un objeto JSON válido.'] };
+  }
+
+  if (raw.format !== LOAN_DATA_FORMAT) {
+    errors.push(`Formato no reconocido (se esperaba "${LOAN_DATA_FORMAT}").`);
+  }
+  if (raw.version !== LOAN_DATA_VERSION) {
+    errors.push(`Versión no soportada (se esperaba ${LOAN_DATA_VERSION}).`);
+  }
+
+  const loan = raw.loan;
+  if (!loan || typeof loan !== 'object') {
+    errors.push('Falta el objeto "loan" con monto, tasa y plazo.');
+    return { ok: false, errors };
+  }
+
+  const principal = Number(loan.principal);
+  const annualRatePercent = Number(loan.annualRatePercent);
+  const termYears = Number(loan.termYears);
+
+  if (!Number.isFinite(principal) || principal <= 0) {
+    errors.push('El monto del préstamo debe ser un número mayor que cero.');
+  }
+  if (!Number.isFinite(annualRatePercent) || annualRatePercent < 0) {
+    errors.push('La tasa de interés debe ser un número mayor o igual a cero.');
+  }
+  if (!Number.isFinite(termYears) || termYears < 1 || Math.floor(termYears) !== termYears) {
+    errors.push('El plazo en años debe ser un entero mayor o igual a 1.');
+  }
+
+  if (errors.length) return { ok: false, errors };
+
+  const totalMonths = Math.max(1, Math.floor(termYears) * 12);
+  const extrasIn = Array.isArray(raw.extras) ? raw.extras : [];
+
+  const normalizedExtras = [];
+  extrasIn.forEach((item, index) => {
+    const row = index + 1;
+    if (!item || typeof item !== 'object') {
+      errors.push(`Abono ${row}: entrada inválida.`);
+      return;
+    }
+    const month = Number(item.month);
+    const amount = Number(item.amount);
+    const strategy = item.strategy;
+
+    if (!Number.isFinite(month) || month !== Math.floor(month) || month < 1 || month > totalMonths) {
+      errors.push(`Abono ${row}: la cuota debe ser un entero entre 1 y ${totalMonths}.`);
+    }
+    if (!Number.isFinite(amount) || amount <= 0) {
+      errors.push(`Abono ${row}: el monto debe ser un número mayor que cero.`);
+    }
+    if (typeof strategy !== 'string' || !ALLOWED_STRATEGIES.has(strategy)) {
+      errors.push(`Abono ${row}: la estrategia debe ser "reduce_term" o "reduce_payment".`);
+    }
+
+    if (
+      Number.isFinite(month) &&
+      month === Math.floor(month) &&
+      month >= 1 &&
+      month <= totalMonths &&
+      Number.isFinite(amount) &&
+      amount > 0 &&
+      typeof strategy === 'string' &&
+      ALLOWED_STRATEGIES.has(strategy)
+    ) {
+      normalizedExtras.push({ month, amount, strategy });
+    }
+  });
+
+  if (errors.length) return { ok: false, errors };
+
+  return {
+    ok: true,
+    loan: {
+      principal,
+      annualRatePercent,
+      termYears: Math.floor(termYears)
+    },
+    extras: normalizedExtras
+  };
+}
+
+function exportLoanDataJson() {
+  const payload = buildLoanDataPayload();
+  if (!payload) {
+    alert('Completa los datos del préstamo (monto y plazo válidos) para exportar.');
+    return;
+  }
+
+  const text = JSON.stringify(payload, null, 2);
+  const fname = `prestamo-${new Date().toISOString().slice(0, 10)}.json`;
+  const blob = new Blob([text], { type: 'application/json;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = fname;
+  a.rel = 'noopener';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
+/**
+ * @param {object} loan
+ * @param {Array<{ month: number, amount: number, strategy: string }>} extras
+ */
+function applyImportedLoan(loan, extras) {
+  loanAmountInput.value = String(loan.principal);
+  annualRateInput.value = String(loan.annualRatePercent);
+  termYearsInput.value = String(loan.termYears);
+  extrasList.innerHTML = '';
+  extras.forEach((e) => {
+    addExtraRow(
+      { month: e.month, amount: e.amount, strategy: e.strategy },
+      { skipRender: true }
+    );
+  });
+  render();
+}
+
+function handleImportFileChange(event) {
+  const file = event.target.files && event.target.files[0];
+  event.target.value = '';
+  if (!file) return;
+
+  const reader = new FileReader();
+  reader.onload = () => {
+    let parsed;
+    try {
+      parsed = JSON.parse(String(reader.result || ''));
+    } catch {
+      alert('No se pudo leer el archivo. Comprueba que sea JSON válido.');
+      return;
+    }
+
+    const result = validateLoanImportPayload(parsed);
+    if (!result.ok) {
+      alert(`No se pudo importar:\n\n${result.errors.join('\n')}`);
+      return;
+    }
+
+    applyImportedLoan(result.loan, result.extras);
+  };
+  reader.onerror = () => {
+    alert('Error al leer el archivo.');
+  };
+  reader.readAsText(file, 'UTF-8');
 }
 
 /**
@@ -624,6 +823,9 @@ clearExtrasBtn.addEventListener('click', () => {
 
 exportPdfBtn.addEventListener('click', exportPdf);
 exportExcelBtn.addEventListener('click', exportExcel);
+exportDataBtn.addEventListener('click', exportLoanDataJson);
+importDataBtn.addEventListener('click', () => importDataFile.click());
+importDataFile.addEventListener('change', handleImportFileChange);
 
 loanAmountInput.addEventListener('input', render);
 annualRateInput.addEventListener('input', render);

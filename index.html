@@ -46,7 +46,10 @@
               <div style="display:flex; gap:10px; flex-wrap:wrap;">
                 <button class="btn-secondary" id="addExtraBtn" type="button">+ Agregar abono extra</button>
                 <button class="btn-secondary" id="clearExtrasBtn" type="button">Limpiar abonos</button>
+                <button class="btn-secondary" id="exportDataBtn" type="button" title="Guardar escenario en un archivo JSON">Exportar datos</button>
+                <button class="btn-secondary" id="importDataBtn" type="button" title="Cargar un escenario desde archivo JSON">Importar datos</button>
               </div>
+              <input type="file" id="importDataFile" accept=".json,application/json" hidden />
             </div>
 
             <div class="extras-list" id="extrasList"></div>
