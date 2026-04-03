@@ -22,8 +22,47 @@ const exportDataBtn = document.getElementById('exportDataBtn');
 const importDataBtn = document.getElementById('importDataBtn');
 const importDataFile = document.getElementById('importDataFile');
 const currencySelect = document.getElementById('currencySelect');
+const toastRegion = document.getElementById('toastRegion');
 
 let extraSequence = 0;
+
+const TOAST_DURATION_MS = 4200;
+
+/**
+ * Muestra un toast breve (éxito o error) para exportaciones e importación.
+ *
+ * @param {string} message Texto principal o descripción (si hay título).
+ * @param {{ title?: string, variant?: 'success' | 'error' }} [options]
+ */
+function showToast(message, options = {}) {
+  if (!toastRegion) return;
+  const variant = options.variant === 'error' ? 'error' : 'success';
+  const el = document.createElement('div');
+  el.className = `toast toast--${variant}`;
+  el.setAttribute('role', 'status');
+  if (options.title) {
+    const titleEl = document.createElement('p');
+    titleEl.className = 'toast__title';
+    titleEl.textContent = options.title;
+    const msgEl = document.createElement('p');
+    msgEl.className = 'toast__message';
+    msgEl.textContent = message;
+    el.append(titleEl, msgEl);
+  } else {
+    el.textContent = message;
+  }
+  toastRegion.appendChild(el);
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => el.classList.add('toast--visible'));
+  });
+  window.setTimeout(() => {
+    el.classList.remove('toast--visible');
+    el.classList.add('toast--leaving');
+    window.setTimeout(() => {
+      el.remove();
+    }, 320);
+  }, TOAST_DURATION_MS);
+}
 
 /**
  * Monedas disponibles. UF usa código ISO CLF (Unidad de Fomento, Chile) para Intl.
@@ -569,6 +608,7 @@ function exportLoanDataJson() {
   a.click();
   a.remove();
   URL.revokeObjectURL(url);
+  showToast('El archivo JSON se descargó correctamente.', { title: 'Simulación guardada' });
 }
 
 /**
@@ -614,6 +654,7 @@ function handleImportFileChange(event) {
     }
 
     applyImportedLoan(result.loan, result.extras);
+    showToast('Los datos del archivo se aplicaron a la calculadora.', { title: 'Simulación cargada' });
   };
   reader.onerror = () => {
     alert('Error al leer el archivo.');
@@ -730,6 +771,7 @@ function exportExcel() {
   a.click();
   a.remove();
   URL.revokeObjectURL(url);
+  showToast('La tabla de amortización se guardó en tu dispositivo.', { title: 'Excel descargado' });
 }
 
 /**
@@ -828,6 +870,7 @@ function exportPdf() {
 
   const fname = `amortizacion-${new Date().toISOString().slice(0, 10)}.pdf`;
   doc.save(fname);
+  showToast('La tabla de amortización se guardó en tu dispositivo.', { title: 'PDF descargado' });
 }
 
 /**
