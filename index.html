@@ -56,20 +56,20 @@
             <input type="file" id="importDataFile" accept=".json,application/json" hidden />
           </div>
 
-          <div class="extras-box">
-            <div class="extras-head">
-              <div>
-                <h3 class="section-title" style="margin-bottom: 6px;">Programar abonos extraordinarios</h3>
+          <details class="extras-box extras-details" open>
+            <summary class="extras-summary">Programar abonos extraordinarios</summary>
+            <div class="extras-body">
+              <div class="extras-head">
                 <p class="extras-help">Cada fila permite elegir el mes, monto y estrategia. Si agregas varios abonos en el mismo mes, se aplican en el orden mostrado.</p>
+                <div class="extras-actions">
+                  <button class="btn-secondary" id="addExtraBtn" type="button">+ Agregar abono extra</button>
+                  <button class="btn-secondary" id="clearExtrasBtn" type="button">Limpiar abonos</button>
+                </div>
               </div>
-              <div class="extras-actions">
-                <button class="btn-secondary" id="addExtraBtn" type="button">+ Agregar abono extra</button>
-                <button class="btn-secondary" id="clearExtrasBtn" type="button">Limpiar abonos</button>
-              </div>
-            </div>
 
-            <div class="extras-list" id="extrasList"></div>
-          </div>
+              <div class="extras-list" id="extrasList"></div>
+            </div>
+          </details>
 
           <div class="cards">
             <article class="card soft">
@@ -116,6 +116,20 @@
               <div class="table-toolbar-export">
                 <button class="btn" id="exportPdfBtn" type="button">Exportar PDF</button>
                 <button class="btn-secondary" id="exportExcelBtn" type="button">Exportar Excel</button>
+                <button
+                  class="fab-schedule"
+                  id="openScheduledAbonosBtn"
+                  type="button"
+                  title="Abonos programados automáticos"
+                  aria-label="Abonos programados automáticos"
+                >
+                  <svg class="fab-schedule__icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                    <path
+                      fill="currentColor"
+                      d="M19 4h-1V2h-2v2H8V2H6v2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 16H5V10h14v10zm0-12H5V6h14v2zM7 12h5v5H7v-5z"
+                    />
+                  </svg>
+                </button>
               </div>
             </div>
           </div>
@@ -178,6 +192,76 @@
   </template>
 
   <div id="toastRegion" class="toast-region" aria-live="polite" aria-relevant="additions text"></div>
+
+  <div class="modal-backdrop" id="scheduledAbonosBackdrop" role="presentation" aria-hidden="true"></div>
+  <div
+    class="modal"
+    id="scheduledAbonosModal"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="scheduledAbonosTitle"
+    aria-hidden="true"
+  >
+    <div class="modal__panel">
+      <div class="modal__head">
+        <h2 class="modal__title" id="scheduledAbonosTitle">Abonos programados</h2>
+        <button type="button" class="modal__close" id="closeScheduledAbonosBtn" aria-label="Cerrar">×</button>
+      </div>
+      <div class="modal__body">
+        <p class="modal__lead">
+          Genera abonos extraordinarios automáticos por frecuencia. Al confirmar se reemplazan los abonos actuales y se
+          recalcula la tabla.
+        </p>
+
+        <div class="modal__fields">
+        <div>
+          <label for="scheduledFrequency">Frecuencia</label>
+          <select id="scheduledFrequency" aria-label="Frecuencia de abonos">
+            <option value="monthly">Mensual</option>
+            <option value="bimonthly">Bimensual</option>
+            <option value="quarterly">Trimestral</option>
+            <option value="semiannual">Semestral</option>
+            <option value="annual">Anual</option>
+          </select>
+        </div>
+        <div>
+          <label for="scheduledCount">Cantidad de abonos</label>
+          <select id="scheduledCount" aria-label="Cantidad de abonos"></select>
+        </div>
+        <div>
+          <label for="scheduledAmount">Monto por abono</label>
+          <input
+            id="scheduledAmount"
+            type="number"
+            min="0"
+            step="0.01"
+            inputmode="decimal"
+            placeholder="0.00"
+            aria-describedby="scheduledAmountHint"
+          />
+          <p class="modal__hint" id="scheduledAmountHint"></p>
+        </div>
+        <div>
+          <label for="scheduledStrategy">Estrategia</label>
+          <select id="scheduledStrategy" aria-label="Estrategia del abono">
+            <option value="reduce_term">Reducir plazo</option>
+            <option value="reduce_payment">Reducir cuota</option>
+          </select>
+        </div>
+        </div>
+
+        <div class="modal__preview" id="scheduledPreview" role="status" aria-live="polite"></div>
+      </div>
+
+      <div class="modal__actions">
+        <button type="button" class="btn-secondary" id="resetScheduledAbonosBtn">Restablecer</button>
+        <div class="modal__actions-main">
+          <button type="button" class="btn-secondary" id="cancelScheduledAbonosBtn">Cancelar</button>
+          <button type="button" class="btn" id="confirmScheduledAbonosBtn">Aplicar abonos</button>
+        </div>
+      </div>
+    </div>
+  </div>
 
   <script src="js/vendor/jspdf.umd.min.js"></script>
   <script src="js/vendor/jspdf.plugin.autotable.min.js"></script>
