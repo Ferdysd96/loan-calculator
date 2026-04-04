@@ -6,8 +6,9 @@ import {
   simulateLoan,
   getMonthsBetweenAbonos,
   maxScheduledAbonoCount,
-  buildScheduledAbonoMonths,
-  computeMaxUniformExtraAmount
+  computeUniformExtraForTargetPayoff,
+  computeFixedAbonoCountBounds,
+  previewFixedAmountAbonoPlan
 } from './lib/loan-math.js';
 import { exportExcel, exportLoanDataJson, exportPdf } from './ui/exports.js';
 import { createShowToast } from './ui/toast.js';
@@ -41,12 +42,19 @@ const toastRegion = document.getElementById('toastRegion');
 const openScheduledAbonosBtn = document.getElementById('openScheduledAbonosBtn');
 const scheduledAbonosBackdrop = document.getElementById('scheduledAbonosBackdrop');
 const scheduledAbonosModal = document.getElementById('scheduledAbonosModal');
+const scheduledTabBtnTarget = document.getElementById('scheduledTabBtnTarget');
+const scheduledTabBtnFixed = document.getElementById('scheduledTabBtnFixed');
+const scheduledPanelTarget = document.getElementById('scheduledPanelTarget');
+const scheduledPanelFixed = document.getElementById('scheduledPanelFixed');
 const scheduledFrequency = document.getElementById('scheduledFrequency');
-const scheduledCount = document.getElementById('scheduledCount');
-const scheduledAmount = document.getElementById('scheduledAmount');
-const scheduledAmountHint = document.getElementById('scheduledAmountHint');
+const scheduledTargetMonths = document.getElementById('scheduledTargetMonths');
 const scheduledStrategy = document.getElementById('scheduledStrategy');
 const scheduledStartFromMonthOne = document.getElementById('scheduledStartFromMonthOne');
+const fixedAbonoAmount = document.getElementById('fixedAbonoAmount');
+const fixedAbonoFrequency = document.getElementById('fixedAbonoFrequency');
+const fixedAbonoStartFromMonthOne = document.getElementById('fixedAbonoStartFromMonthOne');
+const fixedAbonoCount = document.getElementById('fixedAbonoCount');
+const fixedAbonoStrategy = document.getElementById('fixedAbonoStrategy');
 const scheduledPreview = document.getElementById('scheduledPreview');
 const closeScheduledAbonosBtn = document.getElementById('closeScheduledAbonosBtn');
 const cancelScheduledAbonosBtn = document.getElementById('cancelScheduledAbonosBtn');
@@ -171,9 +179,16 @@ function setScheduledModalOpen(open) {
     scheduledAbonosModal.classList.add('is-open');
     scheduledAbonosModal.setAttribute('aria-hidden', 'false');
     document.body.style.overflow = 'hidden';
+    const totalMonthsOpen = Math.max(1, Math.floor(toNumber(termYearsInput.value))) * 12;
+    if (!String(scheduledTargetMonths.value || '').trim()) {
+      const def = Math.min(Math.max(1, totalMonthsOpen - 12), totalMonthsOpen);
+      scheduledTargetMonths.value = String(def);
+    }
+    fixedAbonoAmount.max = String(Math.max(0, toNumber(loanAmountInput.value)));
     refreshScheduledModal();
     window.setTimeout(() => {
-      scheduledAmount.focus();
+      if (getActiveScheduledTab() === 'fixed') fixedAbonoAmount.focus();
+      else scheduledTargetMonths.focus();
     }, 0);
   } else {
     if (scheduledReplaceConfirmModal.classList.contains('is-open')) {
@@ -195,76 +210,113 @@ function setScheduledModalOpen(open) {
   }
 }
 
+function getActiveScheduledTab() {
+  return scheduledPanelFixed.classList.contains('is-active') ? 'fixed' : 'target';
+}
+
+/**
+ * @param {'target' | 'fixed'} tab
+ */
+function setScheduledTab(tab) {
+  const isTarget = tab === 'target';
+  scheduledTabBtnTarget.classList.toggle('is-active', isTarget);
+  scheduledTabBtnTarget.setAttribute('aria-selected', String(isTarget));
+  scheduledTabBtnFixed.classList.toggle('is-active', !isTarget);
+  scheduledTabBtnFixed.setAttribute('aria-selected', String(!isTarget));
+  scheduledPanelTarget.classList.toggle('is-active', isTarget);
+  scheduledPanelFixed.classList.toggle('is-active', !isTarget);
+  scheduledPanelTarget.setAttribute('aria-hidden', String(!isTarget));
+  scheduledPanelFixed.setAttribute('aria-hidden', String(isTarget));
+  refreshScheduledModal();
+}
+
 function refreshScheduledModal() {
+  if (getActiveScheduledTab() === 'fixed') refreshScheduledModalFixed();
+  else refreshScheduledModalTarget();
+}
+
+function refreshScheduledModalTarget() {
   const principal = Math.max(0, toNumber(loanAmountInput.value));
   const annualRate = Math.max(0, toNumber(annualRateInput.value));
   const years = Math.max(1, Math.floor(toNumber(termYearsInput.value)));
   const totalMonths = years * 12;
-  const monthsBetween = getMonthsBetweenAbonos(
-    /** @type {'monthly' | 'bimonthly' | 'quarterly' | 'semiannual' | 'annual'} */ (scheduledFrequency.value)
-  );
-  const startFromMonthOne = scheduledStartFromMonthOne.checked;
-  const maxCount = maxScheduledAbonoCount(totalMonths, monthsBetween, startFromMonthOne);
+  scheduledTargetMonths.min = '1';
+  scheduledTargetMonths.max = String(totalMonths);
 
-  const prevCount = parseInt(scheduledCount.value, 10);
-  scheduledCount.innerHTML = '';
-  scheduledCount.disabled = false;
-  if (maxCount === 0) {
-    const opt = document.createElement('option');
-    opt.value = '0';
-    opt.textContent = 'Ninguno';
-    scheduledCount.appendChild(opt);
-    scheduledCount.value = '0';
-    scheduledCount.disabled = true;
-  } else {
-    for (let c = 1; c <= maxCount; c++) {
-      const opt = document.createElement('option');
-      opt.value = String(c);
-      opt.textContent = String(c);
-      scheduledCount.appendChild(opt);
-    }
-    const nextCount = Number.isFinite(prevCount) ? Math.min(Math.max(1, prevCount), maxCount) : maxCount;
-    scheduledCount.value = String(nextCount);
-  }
-
-  const rawCount = parseInt(scheduledCount.value, 10);
-  const count = maxCount === 0 ? 0 : Number.isFinite(rawCount) ? rawCount : 1;
-  const scheduledMonths =
-    maxCount === 0 ? [] : buildScheduledAbonoMonths(totalMonths, monthsBetween, count, startFromMonthOne);
-  const maxExtra =
-    principal > 0 && scheduledMonths.length
-      ? computeMaxUniformExtraAmount({ principal, annualRate, years, scheduledMonths })
-      : 0;
-
-  if (maxExtra > 0) {
-    scheduledAmount.max = maxExtra;
-    scheduledAmount.setAttribute('max', String(maxExtra));
-    scheduledAmountHint.textContent = `Máximo por abono (saldo aplicable en la línea base, sin otros extras): ${formatCurrency(maxExtra)}.`;
-  } else {
-    scheduledAmount.removeAttribute('max');
-    scheduledAmountHint.textContent =
-      principal <= 0
-        ? 'Ingresa un monto de préstamo válido para calcular el máximo.'
-        : 'No hay saldo aplicable en los meses seleccionados; revisa el plazo o la frecuencia.';
-  }
-
-  const amt = Math.max(0, toNumber(scheduledAmount.value));
-  const capped = maxExtra > 0 ? Math.min(amt, maxExtra) : amt;
-  const stratLabel = scheduledStrategy.value === 'reduce_payment' ? 'Reducir cuota' : 'Reducir plazo';
-
-  if (principal <= 0) {
-    scheduledPreview.textContent =
-      'Completa los datos del préstamo para ver la vista previa y los límites de monto.';
+  const rawStr = String(scheduledTargetMonths.value ?? '').trim();
+  if (!rawStr) {
+    scheduledPreview.textContent = 'Indica en cuántos meses deseas terminar el préstamo.';
     confirmScheduledAbonosBtn.disabled = true;
     return;
   }
 
-  if (maxCount === 0 || !scheduledMonths.length || maxExtra <= 0) {
+  const rawTarget = parseInt(rawStr, 10);
+  const startFromMonthOne = scheduledStartFromMonthOne.checked;
+  const monthsBetween = getMonthsBetweenAbonos(
+    /** @type {'monthly' | 'bimonthly' | 'quarterly' | 'semiannual' | 'annual'} */ (scheduledFrequency.value)
+  );
+  const stratLabel = scheduledStrategy.value === 'reduce_payment' ? 'Reducir cuota' : 'Reducir plazo';
+
+  if (principal <= 0) {
     scheduledPreview.textContent =
-      maxCount === 0
-        ? 'Con el plazo actual no cabe ningún abono a esta frecuencia. Elige otra frecuencia o amplía el plazo.'
-        : 'No se pueden colocar abonos con la frecuencia y plazo actuales. Ajusta el préstamo o elige otra frecuencia.';
+      'Completa los datos del préstamo para ver la vista previa y el monto calculado.';
     confirmScheduledAbonosBtn.disabled = true;
+    return;
+  }
+
+  if (!Number.isFinite(rawTarget) || rawTarget <= 0) {
+    scheduledPreview.textContent = 'Indica un objetivo de meses mayor que cero.';
+    confirmScheduledAbonosBtn.disabled = true;
+    return;
+  }
+
+  if (rawTarget > totalMonths) {
+    scheduledPreview.textContent = `El objetivo no puede superar el plazo (${totalMonths} meses).`;
+    confirmScheduledAbonosBtn.disabled = true;
+    return;
+  }
+
+  const maxAbonosByTarget =
+    rawTarget > 0 ? maxScheduledAbonoCount(rawTarget, monthsBetween, startFromMonthOne) : 0;
+
+  if (rawTarget < totalMonths && maxAbonosByTarget === 0) {
+    scheduledPreview.textContent =
+      'Con esta frecuencia no cabe ningún abono dentro del objetivo de meses. Elige otra frecuencia, marca «Comenzar desde el mes 1» o aumenta el objetivo de meses.';
+    confirmScheduledAbonosBtn.disabled = true;
+    return;
+  }
+
+  const result = computeUniformExtraForTargetPayoff({
+    principal,
+    annualRate,
+    years,
+    targetMonths: rawTarget,
+    frequencyId: /** @type {'monthly' | 'bimonthly' | 'quarterly' | 'semiannual' | 'annual'} */ (
+      scheduledFrequency.value
+    ),
+    startFromMonthOne,
+    strategy: scheduledStrategy.value
+  });
+
+  if (!result) {
+    scheduledPreview.textContent =
+      'No se pudo calcular un plan uniforme con estos datos. Prueba otro objetivo de meses o otra frecuencia.';
+    confirmScheduledAbonosBtn.disabled = true;
+    return;
+  }
+
+  const { amount, scheduledMonths } = result;
+
+  if (rawTarget < totalMonths && scheduledMonths.length > 0 && amount <= 0) {
+    scheduledPreview.textContent =
+      'No se obtuvo un monto de abono válido con esta estrategia. Prueba «Reducir plazo» u otra combinación de meses y frecuencia.';
+    confirmScheduledAbonosBtn.disabled = true;
+    return;
+  }
+
+  if (rawTarget === totalMonths) {
+    scheduledPreview.textContent = `Sin abonos extraordinarios: liquidación en el plazo original (${totalMonths} meses). Al confirmar se limpiarán los abonos actuales.`;
+    confirmScheduledAbonosBtn.disabled = false;
     return;
   }
 
@@ -278,25 +330,244 @@ function refreshScheduledModal() {
   }
 
   scheduledPreview.textContent = [
-    `Meses del abono: ${monthsText}.`,
-    `Monto por abono: ${formatCurrency(capped)}${amt > capped ? ` (ajustado al máximo ${formatCurrency(maxExtra)})` : ''}.`,
-    `Total programado: ${formatCurrency(capped * scheduledMonths.length)}.`,
+    `Objetivo: terminar en ${rawTarget} meses (plazo original ${totalMonths} meses).`,
+    `Meses de abono: ${monthsText}.`,
+    `Monto aproximado por abono: ${formatCurrency(amount)}.`,
+    `Total abonos extraordinarios: ${formatCurrency(amount * scheduledMonths.length)}.`,
     `Estrategia: ${stratLabel}.`
   ].join(' ');
 }
 
+/**
+ * @param {number} minK
+ * @param {number} maxK
+ * @param {number} [preferred]
+ */
+function populateFixedAbonoCountOptions(minK, maxK, preferred) {
+  fixedAbonoCount.innerHTML = '';
+  for (let k = minK; k <= maxK; k++) {
+    const opt = document.createElement('option');
+    opt.value = String(k);
+    opt.textContent = `${k} abono${k === 1 ? '' : 's'}`;
+    fixedAbonoCount.appendChild(opt);
+  }
+  let use = minK;
+  if (Number.isFinite(preferred) && preferred >= minK && preferred <= maxK) use = preferred;
+  fixedAbonoCount.value = String(use);
+}
+
+function refreshScheduledModalFixed() {
+  const principal = Math.max(0, toNumber(loanAmountInput.value));
+  const annualRate = Math.max(0, toNumber(annualRateInput.value));
+  const years = Math.max(1, Math.floor(toNumber(termYearsInput.value)));
+  const totalMonths = years * 12;
+  fixedAbonoAmount.max = principal > 0 ? String(principal) : '';
+
+  const freq = /** @type {'monthly' | 'bimonthly' | 'quarterly' | 'semiannual' | 'annual'} */ (
+    fixedAbonoFrequency.value
+  );
+  const startFixed = fixedAbonoStartFromMonthOne.checked;
+  const stratFixed = fixedAbonoStrategy.value;
+  const stratLabelFixed = stratFixed === 'reduce_payment' ? 'Reducir cuota' : 'Reducir plazo';
+  const amt = Math.max(0, toNumber(fixedAbonoAmount.value));
+
+  if (principal <= 0) {
+    scheduledPreview.textContent =
+      'Completa los datos del préstamo para ver la vista previa, el rango de abonos y el tiempo estimado.';
+    confirmScheduledAbonosBtn.disabled = true;
+    fixedAbonoCount.innerHTML = '';
+    fixedAbonoCount.disabled = true;
+    return;
+  }
+
+  if (amt <= 0) {
+    scheduledPreview.textContent = 'Indica un monto de abono mayor que cero.';
+    confirmScheduledAbonosBtn.disabled = true;
+    fixedAbonoCount.innerHTML = '';
+    fixedAbonoCount.disabled = true;
+    return;
+  }
+
+  if (amt > principal) {
+    scheduledPreview.textContent = 'El abono no puede superar el capital del préstamo.';
+    confirmScheduledAbonosBtn.disabled = true;
+    fixedAbonoCount.innerHTML = '';
+    fixedAbonoCount.disabled = true;
+    return;
+  }
+
+  const bounds = computeFixedAbonoCountBounds({
+    principal,
+    annualRate,
+    years,
+    amountPerAbono: amt,
+    frequencyId: freq,
+    startFromMonthOne: startFixed,
+    strategy: stratFixed
+  });
+
+  if (!bounds) {
+    scheduledPreview.textContent =
+      'Con esta frecuencia no cabe ningún abono en el plazo o el monto no es válido. Revisa frecuencia y casilla de inicio.';
+    confirmScheduledAbonosBtn.disabled = true;
+    fixedAbonoCount.innerHTML = '';
+    fixedAbonoCount.disabled = true;
+    return;
+  }
+
+  const prevK = parseInt(fixedAbonoCount.value, 10);
+  populateFixedAbonoCountOptions(
+    1,
+    bounds.maxK,
+    Number.isFinite(prevK) ? prevK : 1
+  );
+  fixedAbonoCount.disabled = false;
+
+  const k = parseInt(fixedAbonoCount.value, 10);
+  const preview = previewFixedAmountAbonoPlan({
+    principal,
+    annualRate,
+    years,
+    amountPerAbono: amt,
+    frequencyId: freq,
+    startFromMonthOne: startFixed,
+    strategy: stratFixed,
+    abonoCount: k
+  });
+
+  if (!preview) {
+    scheduledPreview.textContent = 'No se pudo calcular la vista previa.';
+    confirmScheduledAbonosBtn.disabled = true;
+    return;
+  }
+
+  const { scheduledMonths, scenario, baseline, monthsSaved, interestSaved } = preview;
+  const monthsToPay = scenario.totalMonthsUsed;
+  let monthsText;
+  if (scheduledMonths.length <= 12) {
+    monthsText = scheduledMonths.join(', ');
+  } else {
+    monthsText = `${scheduledMonths.slice(0, 12).join(', ')}… (${scheduledMonths.length} en total)`;
+  }
+
+  const lines = [
+    `Meses de aplicación del abono: ${monthsText}.`,
+    `Tiempo total estimado: ${formatNumber(monthsToPay)} meses (plazo original ${formatNumber(baseline.totalMonthsUsed)}).`,
+    `Ahorro estimado en intereses: ${formatCurrency(interestSaved)}.`,
+    `Estrategia: ${stratLabelFixed}.`
+  ];
+
+  if (monthsSaved > 0) {
+    lines.unshift(`✅ Reducirás el préstamo en ${formatNumber(monthsSaved)} meses respecto al plan sin abonos extra.`);
+  }
+
+  const lowImpact =
+    monthsSaved < 3 && interestSaved < baseline.totalInterest * 0.01 && monthsSaved >= 0;
+  if (lowImpact && amt > 0) {
+    lines.push(
+      '⚠️ El monto es muy bajo para generar un impacto significativo en intereses; prueba subir el abono o la frecuencia.'
+    );
+  }
+
+  if (k > bounds.minK) {
+    lines.push(
+      `Con ${formatNumber(bounds.minK)} abono${bounds.minK === 1 ? '' : 's'} ya alcanzas el mismo tiempo mínimo (${formatNumber(bounds.monthsAtFull)} meses); abonar más veces puede no cambiar la fecha de salida.`
+    );
+  }
+
+  if (k < bounds.minK) {
+    lines.push(
+      `⚠️ Con menos de ${formatNumber(bounds.minK)} abono${bounds.minK === 1 ? '' : 's'} el préstamo tarda más en liquidarse que usando todos los huecos posibles con este monto (${formatNumber(bounds.monthsAtFull)} meses).`
+    );
+  }
+
+  scheduledPreview.textContent = lines.join(' ');
+  confirmScheduledAbonosBtn.disabled = false;
+}
+
 function resetScheduledModalDefaults() {
   scheduledFrequency.value = 'monthly';
-  scheduledAmount.value = '';
   scheduledStrategy.value = 'reduce_term';
   scheduledStartFromMonthOne.checked = true;
-  refreshScheduledModal();
+  fixedAbonoFrequency.value = 'monthly';
+  fixedAbonoStartFromMonthOne.checked = true;
+  fixedAbonoStrategy.value = 'reduce_term';
+  fixedAbonoAmount.value = '';
   const totalMonths = Math.max(1, Math.floor(toNumber(termYearsInput.value))) * 12;
-  const maxCount = maxScheduledAbonoCount(totalMonths, getMonthsBetweenAbonos('monthly'), true);
-  if (maxCount > 0 && !scheduledCount.disabled) {
-    scheduledCount.value = String(maxCount);
-    refreshScheduledModal();
+  scheduledTargetMonths.value = String(Math.min(Math.max(1, totalMonths - 12), totalMonths));
+  setScheduledTab('target');
+}
+
+/**
+ * @returns {{ scheduledMonths: number[], amount: number, strategy: string } | null}
+ */
+function getFixedAbonoApplyPayload(principal, annualRate, years) {
+  const amt = Math.max(0, toNumber(fixedAbonoAmount.value));
+  if (amt <= 0) {
+    showToast('Indica un monto de abono mayor que cero.', { title: 'Monto requerido', variant: 'error' });
+    return null;
   }
+  if (amt > principal) {
+    showToast('El abono no puede superar el capital del préstamo.', { title: 'Monto inválido', variant: 'error' });
+    return null;
+  }
+
+  const freq = /** @type {'monthly' | 'bimonthly' | 'quarterly' | 'semiannual' | 'annual'} */ (
+    fixedAbonoFrequency.value
+  );
+  const startFixed = fixedAbonoStartFromMonthOne.checked;
+  const stratFixed = fixedAbonoStrategy.value;
+
+  const bounds = computeFixedAbonoCountBounds({
+    principal,
+    annualRate,
+    years,
+    amountPerAbono: amt,
+    frequencyId: freq,
+    startFromMonthOne: startFixed,
+    strategy: stratFixed
+  });
+  if (!bounds) {
+    showToast('No hay un rango válido de abonos con esta frecuencia y monto.', {
+      title: 'No se puede aplicar',
+      variant: 'error'
+    });
+    return null;
+  }
+
+  const k = parseInt(fixedAbonoCount.value, 10);
+  if (!Number.isFinite(k) || k < 1 || k > bounds.maxK) {
+    showToast(
+      `Elige entre 1 y ${bounds.maxK} abono${bounds.maxK === 1 ? '' : 's'} (máximo de huecos con esta frecuencia y plazo).`,
+      {
+        title: 'Cantidad inválida',
+        variant: 'error'
+      }
+    );
+    return null;
+  }
+
+  const preview = previewFixedAmountAbonoPlan({
+    principal,
+    annualRate,
+    years,
+    amountPerAbono: amt,
+    frequencyId: freq,
+    startFromMonthOne: startFixed,
+    strategy: stratFixed,
+    abonoCount: k
+  });
+
+  if (!preview || preview.scheduledMonths.length === 0) {
+    showToast('No se pudo generar el plan de abonos.', { title: 'No se puede aplicar', variant: 'error' });
+    return null;
+  }
+
+  return {
+    scheduledMonths: preview.scheduledMonths,
+    amount: amt,
+    strategy: stratFixed
+  };
 }
 
 /**
@@ -312,36 +583,71 @@ function getScheduledApplyPayload() {
     return null;
   }
 
+  if (getActiveScheduledTab() === 'fixed') {
+    return getFixedAbonoApplyPayload(principal, annualRate, years);
+  }
+
   const totalMonths = years * 12;
+  const rawTarget = parseInt(String(scheduledTargetMonths.value ?? '').trim(), 10);
+  if (!Number.isFinite(rawTarget) || rawTarget <= 0) {
+    showToast('Indica un objetivo de meses mayor que cero.', { title: 'Objetivo inválido', variant: 'error' });
+    return null;
+  }
+  if (rawTarget > totalMonths) {
+    showToast(`El objetivo no puede ser mayor que el plazo (${totalMonths} meses).`, {
+      title: 'Objetivo inválido',
+      variant: 'error'
+    });
+    return null;
+  }
+
   const monthsBetween = getMonthsBetweenAbonos(
     /** @type {'monthly' | 'bimonthly' | 'quarterly' | 'semiannual' | 'annual'} */ (scheduledFrequency.value)
   );
   const startFromMonthOne = scheduledStartFromMonthOne.checked;
-  const maxCount = maxScheduledAbonoCount(totalMonths, monthsBetween, startFromMonthOne);
-  const rawCount = parseInt(scheduledCount.value, 10);
-  const count = maxCount === 0 ? 0 : Number.isFinite(rawCount) ? rawCount : 1;
-  const scheduledMonths =
-    maxCount === 0 ? [] : buildScheduledAbonoMonths(totalMonths, monthsBetween, count, startFromMonthOne);
-  const maxExtra = computeMaxUniformExtraAmount({ principal, annualRate, years, scheduledMonths });
-  let amount = Math.max(0, toNumber(scheduledAmount.value));
-  if (maxExtra > 0) amount = Math.min(amount, maxExtra);
 
-  if (!scheduledMonths.length || maxExtra <= 0) {
-    showToast('No hay meses válidos o saldo aplicable para estos abonos.', {
+  if (rawTarget < totalMonths && maxScheduledAbonoCount(rawTarget, monthsBetween, startFromMonthOne) === 0) {
+    showToast('Con esta frecuencia no cabe al menos un abono dentro del objetivo de meses.', {
+      title: 'Frecuencia insuficiente',
+      variant: 'error'
+    });
+    return null;
+  }
+
+  const result = computeUniformExtraForTargetPayoff({
+    principal,
+    annualRate,
+    years,
+    targetMonths: rawTarget,
+    frequencyId: /** @type {'monthly' | 'bimonthly' | 'quarterly' | 'semiannual' | 'annual'} */ (
+      scheduledFrequency.value
+    ),
+    startFromMonthOne,
+    strategy: scheduledStrategy.value
+  });
+
+  if (!result) {
+    showToast('No se pudo calcular el plan de abonos. Ajusta objetivo o frecuencia.', {
       title: 'No se puede aplicar',
       variant: 'error'
     });
     return null;
   }
-  if (amount <= 0) {
-    showToast('Indica un monto mayor que cero.', { title: 'Monto requerido', variant: 'error' });
+
+  const { amount, scheduledMonths, strategy } = result;
+
+  if (rawTarget < totalMonths && scheduledMonths.length > 0 && amount <= 0) {
+    showToast(
+      'Con la estrategia elegida no se obtiene un monto positivo. Prueba «Reducir plazo» u otra combinación.',
+      { title: 'No se puede aplicar', variant: 'error' }
+    );
     return null;
   }
 
   return {
     scheduledMonths,
     amount,
-    strategy: scheduledStrategy.value
+    strategy
   };
 }
 
@@ -351,6 +657,13 @@ function getScheduledApplyPayload() {
 function executeScheduledApply(payload) {
   const { scheduledMonths, amount, strategy } = payload;
   extrasList.innerHTML = '';
+  if (scheduledMonths.length === 0) {
+    setScheduledReplaceConfirmOpen(false);
+    setScheduledModalOpen(false);
+    showToast('Se eliminaron los abonos extraordinarios.', { title: 'Abonos programados' });
+    render();
+    return;
+  }
   scheduledMonths.forEach((month, i) => {
     addExtraRow({ month, amount, strategy }, { skipRender: i < scheduledMonths.length - 1 });
   });
@@ -600,11 +913,21 @@ applyScheduledReplaceConfirmBtn.addEventListener('click', () => {
 });
 scheduledReplaceConfirmBackdrop.addEventListener('click', () => setScheduledReplaceConfirmOpen(false));
 
+scheduledTabBtnTarget.addEventListener('click', () => setScheduledTab('target'));
+scheduledTabBtnFixed.addEventListener('click', () => setScheduledTab('fixed'));
+
 scheduledFrequency.addEventListener('change', refreshScheduledModal);
-scheduledCount.addEventListener('change', refreshScheduledModal);
-scheduledAmount.addEventListener('input', refreshScheduledModal);
+scheduledTargetMonths.addEventListener('input', refreshScheduledModal);
+scheduledTargetMonths.addEventListener('change', refreshScheduledModal);
 scheduledStrategy.addEventListener('change', refreshScheduledModal);
 scheduledStartFromMonthOne.addEventListener('change', refreshScheduledModal);
+
+fixedAbonoAmount.addEventListener('input', refreshScheduledModal);
+fixedAbonoAmount.addEventListener('change', refreshScheduledModal);
+fixedAbonoFrequency.addEventListener('change', refreshScheduledModal);
+fixedAbonoStartFromMonthOne.addEventListener('change', refreshScheduledModal);
+fixedAbonoCount.addEventListener('change', refreshScheduledModal);
+fixedAbonoStrategy.addEventListener('change', refreshScheduledModal);
 
 document.addEventListener('keydown', (e) => {
   if (e.key !== 'Escape') return;

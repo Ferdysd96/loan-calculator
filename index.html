@@ -208,61 +208,159 @@
         <button type="button" class="modal__close" id="closeScheduledAbonosBtn" aria-label="Cerrar">×</button>
       </div>
       <div class="modal__body">
-        <p class="modal__lead">
-          Genera abonos extraordinarios automáticos por frecuencia. Al confirmar se reemplazan los abonos actuales y se
-          recalcula la tabla.
-        </p>
+        <div class="modal__tabs" role="tablist" aria-label="Modalidad de abonos programados">
+          <button
+            type="button"
+            class="modal__tab is-active"
+            id="scheduledTabBtnTarget"
+            role="tab"
+            aria-selected="true"
+            aria-controls="scheduledPanelTarget"
+          >
+            Pagar en X meses
+          </button>
+          <button
+            type="button"
+            class="modal__tab"
+            id="scheduledTabBtnFixed"
+            role="tab"
+            aria-selected="false"
+            aria-controls="scheduledPanelFixed"
+          >
+            Definir monto de abono
+          </button>
+        </div>
 
-        <div class="modal__fields">
-        <div>
-          <label for="scheduledFrequency">Frecuencia</label>
-          <select id="scheduledFrequency" aria-label="Frecuencia de abonos">
-            <option value="monthly">Mensual</option>
-            <option value="bimonthly">Bimensual</option>
-            <option value="quarterly">Trimestral</option>
-            <option value="semiannual">Semestral</option>
-            <option value="annual">Anual</option>
-          </select>
-        </div>
-        <div class="modal__field-checkbox">
-          <label class="modal__checkbox-label" for="scheduledStartFromMonthOne">
-            <input
-              type="checkbox"
-              id="scheduledStartFromMonthOne"
-              checked
-              aria-describedby="scheduledStartFromMonthOneHint"
-            />
-            <span>Primer abono en el mes 1</span>
-          </label>
-          <p class="modal__hint" id="scheduledStartFromMonthOneHint">
-            Si lo desmarcas, el primero cae en el primer múltiplo de la frecuencia (p. ej. mes 6 en semestral: 6, 12,
-            18…).
+        <div
+          class="modal__tab-panel is-active"
+          id="scheduledPanelTarget"
+          role="tabpanel"
+          aria-labelledby="scheduledTabBtnTarget"
+          aria-hidden="false"
+        >
+          <p class="modal__lead">
+            Indica en cuántos meses quieres liquidar el préstamo y la frecuencia de abonos; se calcula un monto uniforme
+            por abono y al confirmar se reemplazan los abonos actuales y se recalcula la tabla.
           </p>
+
+          <div class="modal__fields">
+            <div>
+              <label for="scheduledTargetMonths">¿En cuántos meses deseas terminar el préstamo?</label>
+              <input
+                id="scheduledTargetMonths"
+                type="number"
+                min="1"
+                step="1"
+                inputmode="numeric"
+                aria-describedby="scheduledTargetMonthsHint"
+              />
+              <p class="modal__hint" id="scheduledTargetMonthsHint">
+                Debe ser mayor que 0 y no mayor que el plazo en meses. Menos meses implican abonos más altos.
+              </p>
+            </div>
+            <div>
+              <label for="scheduledFrequency">Frecuencia de abonos</label>
+              <select id="scheduledFrequency" aria-label="Frecuencia de abonos">
+                <option value="monthly">Mensual</option>
+                <option value="bimonthly">Bimensual</option>
+                <option value="quarterly">Trimestral</option>
+                <option value="semiannual">Semestral</option>
+                <option value="annual">Anual</option>
+              </select>
+            </div>
+            <div class="modal__field-checkbox">
+              <label class="modal__checkbox-label" for="scheduledStartFromMonthOne">
+                <input
+                  type="checkbox"
+                  id="scheduledStartFromMonthOne"
+                  checked
+                  aria-describedby="scheduledStartFromMonthOneHint"
+                />
+                <span>Comenzar desde el mes 1</span>
+              </label>
+              <p class="modal__hint" id="scheduledStartFromMonthOneHint">
+                Si lo desmarcas, el primero cae en el primer múltiplo de la frecuencia (p. ej. mes 6 en semestral: 6, 12,
+                18…).
+              </p>
+            </div>
+            <div>
+              <label for="scheduledStrategy">Estrategia</label>
+              <select id="scheduledStrategy" aria-label="Estrategia del abono">
+                <option value="reduce_term">Reducir plazo</option>
+                <option value="reduce_payment">Reducir cuota</option>
+              </select>
+            </div>
+          </div>
         </div>
-        <div>
-          <label for="scheduledCount">Cantidad de abonos</label>
-          <select id="scheduledCount" aria-label="Cantidad de abonos"></select>
-        </div>
-        <div>
-          <label for="scheduledAmount">Monto por abono</label>
-          <input
-            id="scheduledAmount"
-            type="number"
-            min="0"
-            step="0.01"
-            inputmode="decimal"
-            placeholder="0.00"
-            aria-describedby="scheduledAmountHint"
-          />
-          <p class="modal__hint" id="scheduledAmountHint"></p>
-        </div>
-        <div>
-          <label for="scheduledStrategy">Estrategia</label>
-          <select id="scheduledStrategy" aria-label="Estrategia del abono">
-            <option value="reduce_term">Reducir plazo</option>
-            <option value="reduce_payment">Reducir cuota</option>
-          </select>
-        </div>
+
+        <div
+          class="modal__tab-panel"
+          id="scheduledPanelFixed"
+          role="tabpanel"
+          aria-labelledby="scheduledTabBtnFixed"
+          aria-hidden="true"
+        >
+          <p class="modal__lead">
+            Define cuánto puedes abonar en cada fecha y cuántas veces; verás el tiempo estimado de salida de la deuda y
+            el ahorro en intereses. Al confirmar se reemplazan los abonos actuales.
+          </p>
+
+          <div class="modal__fields">
+            <div>
+              <label for="fixedAbonoAmount">¿Cuánto deseas abonar cada vez?</label>
+              <input
+                id="fixedAbonoAmount"
+                type="number"
+                min="0"
+                step="0.01"
+                inputmode="decimal"
+                placeholder="0.00"
+                aria-describedby="fixedAbonoAmountHint"
+              />
+              <p class="modal__hint" id="fixedAbonoAmountHint">
+                Mayor que cero y no mayor que el capital del préstamo.
+              </p>
+            </div>
+            <div>
+              <label for="fixedAbonoFrequency">Frecuencia de abonos</label>
+              <select id="fixedAbonoFrequency" aria-label="Frecuencia de abonos (monto fijo)">
+                <option value="monthly">Mensual</option>
+                <option value="bimonthly">Bimensual</option>
+                <option value="quarterly">Trimestral</option>
+                <option value="semiannual">Semestral</option>
+                <option value="annual">Anual</option>
+              </select>
+            </div>
+            <div class="modal__field-checkbox">
+              <label class="modal__checkbox-label" for="fixedAbonoStartFromMonthOne">
+                <input
+                  type="checkbox"
+                  id="fixedAbonoStartFromMonthOne"
+                  checked
+                  aria-describedby="fixedAbonoStartFromMonthOneHint"
+                />
+                <span>Comenzar desde el mes 1</span>
+              </label>
+              <p class="modal__hint" id="fixedAbonoStartFromMonthOneHint">
+                Si lo desmarcas, el primero cae en el primer múltiplo de la frecuencia (p. ej. mes 6 en semestral).
+              </p>
+            </div>
+            <div>
+              <label for="fixedAbonoCount">Cantidad de abonos</label>
+              <select id="fixedAbonoCount" aria-label="Cantidad de abonos a programar"></select>
+              <p class="modal__hint" id="fixedAbonoCountHint">
+                De 1 al máximo de abonos que aún aplican antes de liquidar el préstamo con ese monto y frecuencia (no puede
+                superar los huecos del plazo ni las cuotas hasta la fecha de salida).
+              </p>
+            </div>
+            <div>
+              <label for="fixedAbonoStrategy">Estrategia</label>
+              <select id="fixedAbonoStrategy" aria-label="Estrategia del abono (monto fijo)">
+                <option value="reduce_term">Reducir plazo</option>
+                <option value="reduce_payment">Reducir cuota</option>
+              </select>
+            </div>
+          </div>
         </div>
 
         <div class="modal__preview" id="scheduledPreview" role="status" aria-live="polite"></div>

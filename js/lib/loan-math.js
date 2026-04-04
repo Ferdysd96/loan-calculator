@@ -278,3 +278,269 @@ export function computeMaxUniformExtraAmount({ principal, annualRate, years, sch
   }
   return Number.isFinite(min) && min > 0 ? min : 0;
 }
+
+/**
+ * Abono uniforme mínimo en los meses dados por frecuencia (hasta `targetMonths`)
+ * para que la simulación termine en a lo sumo `targetMonths` meses.
+ *
+ * @param {object} p
+ * @param {number} p.principal
+ * @param {number} p.annualRate
+ * @param {number} p.years
+ * @param {number} p.targetMonths Objetivo de meses hasta liquidar (1..plazo total)
+ * @param {ExtraFrequencyId} p.frequencyId
+ * @param {boolean} [p.startFromMonthOne]
+ * @param {string} [p.strategy]
+ * @returns {null | { amount: number, scheduledMonths: number[], strategy: string, targetMonths: number, totalMonths: number }}
+ */
+export function computeUniformExtraForTargetPayoff({
+  principal,
+  annualRate,
+  years,
+  targetMonths,
+  frequencyId,
+  startFromMonthOne = true,
+  strategy = 'reduce_term'
+}) {
+  const totalMonths = Math.max(1, Math.floor(years * 12));
+  if (principal <= 0 || !Number.isFinite(principal)) return null;
+
+  const T = Math.floor(Number(targetMonths));
+  if (!Number.isFinite(T) || T <= 0 || T > totalMonths) return null;
+
+  if (T >= totalMonths) {
+    return { amount: 0, scheduledMonths: [], strategy, targetMonths: T, totalMonths };
+  }
+
+  const monthsBetween = getMonthsBetweenAbonos(
+    /** @type {'monthly' | 'bimonthly' | 'quarterly' | 'semiannual' | 'annual'} */ (frequencyId)
+  );
+  const maxCount = maxScheduledAbonoCount(T, monthsBetween, startFromMonthOne);
+  if (maxCount === 0) return null;
+
+  const scheduledMonths = buildScheduledAbonoMonths(T, monthsBetween, maxCount, startFromMonthOne);
+  if (!scheduledMonths.length) return null;
+
+  const extrasForAmount = (amount) =>
+    scheduledMonths.map((month) => ({ month, amount, strategy }));
+
+  /** @param {number} amount */
+  const monthsUsed = (amount) =>
+    simulateLoan({ principal, annualRate, years, extras: extrasForAmount(amount) }).totalMonthsUsed;
+
+  if (monthsUsed(0) <= T) {
+    return { amount: 0, scheduledMonths, strategy, targetMonths: T, totalMonths };
+  }
+
+  let hi = 1;
+  let guard = 0;
+  while (monthsUsed(hi) > T && guard < 90) {
+    hi *= 2;
+    guard++;
+    if (!Number.isFinite(hi) || hi > 1e25) return null;
+  }
+  if (monthsUsed(hi) > T) return null;
+
+  let lo = 0;
+  for (let i = 0; i < 80; i++) {
+    const mid = (lo + hi) / 2;
+    if (monthsUsed(mid) <= T) hi = mid;
+    else lo = mid;
+  }
+
+  let amount = Math.max(0, hi);
+  const round2 = (x) => Math.round(x * 100) / 100;
+  amount = round2(amount);
+  if (monthsUsed(amount) > T) {
+    amount = Math.ceil(hi * 100) / 100;
+    let steps = 0;
+    while (monthsUsed(amount) > T && steps < 100000 && amount < 1e20) {
+      amount = round2(amount + 0.01);
+      steps++;
+    }
+    if (monthsUsed(amount) > T) return null;
+  }
+
+  return { amount, scheduledMonths, strategy, targetMonths: T, totalMonths };
+}
+
+/**
+ * Con monto y frecuencia fijos, meses totales al usar los primeros K abonos.
+ * @returns {number}
+ */
+function monthsUsedForAbonoCount(
+  principal,
+  annualRate,
+  years,
+  amountPerAbono,
+  monthsBetween,
+  totalMonths,
+  k,
+  startFromMonthOne,
+  strategy
+) {
+  const scheduledMonths = buildScheduledAbonoMonths(totalMonths, monthsBetween, k, startFromMonthOne);
+  const extras = scheduledMonths.map((month) => ({ month, amount: amountPerAbono, strategy }));
+  return simulateLoan({ principal, annualRate, years, extras }).totalMonthsUsed;
+}
+
+/**
+ * Simula abonos en todos los huecos del plazo y cuenta cuántas fechas de abono quedan en o antes del mes en que
+ * se liquida el préstamo (las posteriores no tendrían sentido).
+ *
+ * @returns {number}
+ */
+function countAbonoSlotsUntilPayoff({
+  principal,
+  annualRate,
+  years,
+  amountPerAbono,
+  monthsBetween,
+  totalMonths,
+  startFromMonthOne,
+  strategy
+}) {
+  const slotCount = maxScheduledAbonoCount(totalMonths, monthsBetween, startFromMonthOne);
+  if (slotCount === 0) return 0;
+  const scheduledMonths = buildScheduledAbonoMonths(totalMonths, monthsBetween, slotCount, startFromMonthOne);
+  const extras = scheduledMonths.map((month) => ({ month, amount: amountPerAbono, strategy }));
+  const sim = simulateLoan({ principal, annualRate, years, extras });
+  const payoffMonth = sim.totalMonthsUsed;
+  let n = 0;
+  for (const m of scheduledMonths) {
+    if (m <= payoffMonth) n++;
+    else break;
+  }
+  return n;
+}
+
+/**
+ * Límites para el tab de monto fijo:
+ * - maxK: abonos que aún aplican antes de liquidar (≤ huecos del plazo según frecuencia e inicio).
+ * - minK: menor K con el mismo tiempo total que usar los maxK abonos (referencia UX; el selector va de 1 a maxK).
+ *
+ * @param {object} p
+ * @param {number} p.principal
+ * @param {number} p.annualRate
+ * @param {number} p.years
+ * @param {number} p.amountPerAbono
+ * @param {ExtraFrequencyId} p.frequencyId
+ * @param {boolean} [p.startFromMonthOne]
+ * @param {string} [p.strategy]
+ * @returns {null | { minK: number, maxK: number, monthsAtFull: number }}
+ */
+export function computeFixedAbonoCountBounds({
+  principal,
+  annualRate,
+  years,
+  amountPerAbono,
+  frequencyId,
+  startFromMonthOne = true,
+  strategy = 'reduce_term'
+}) {
+  const totalMonths = Math.max(1, Math.floor(years * 12));
+  const monthsBetween = getMonthsBetweenAbonos(
+    /** @type {'monthly' | 'bimonthly' | 'quarterly' | 'semiannual' | 'annual'} */ (frequencyId)
+  );
+  const slotsInTerm = maxScheduledAbonoCount(totalMonths, monthsBetween, startFromMonthOne);
+  if (slotsInTerm === 0 || amountPerAbono <= 0 || !Number.isFinite(amountPerAbono)) {
+    return null;
+  }
+
+  const maxK = countAbonoSlotsUntilPayoff({
+    principal,
+    annualRate,
+    years,
+    amountPerAbono,
+    monthsBetween,
+    totalMonths,
+    startFromMonthOne,
+    strategy
+  });
+  if (maxK < 1) {
+    return null;
+  }
+
+  const mu = (k) =>
+    monthsUsedForAbonoCount(
+      principal,
+      annualRate,
+      years,
+      amountPerAbono,
+      monthsBetween,
+      totalMonths,
+      k,
+      startFromMonthOne,
+      strategy
+    );
+
+  const monthsAtFull = mu(maxK);
+
+  let lo = 1;
+  let hi = maxK;
+  while (lo < hi) {
+    const mid = Math.floor((lo + hi) / 2);
+    if (mu(mid) > monthsAtFull) lo = mid + 1;
+    else hi = mid;
+  }
+  const minK = Math.min(lo, maxK);
+
+  return { minK, maxK, monthsAtFull };
+}
+
+/**
+ * Vista previa para tab «monto fijo»: meses programados, escenario y ahorros vs línea base.
+ *
+ * @param {object} p
+ * @param {number} p.abonoCount
+ * @returns {null | {
+ *   scheduledMonths: number[],
+ *   scenario: ReturnType<typeof simulateLoan>,
+ *   baseline: ReturnType<typeof simulateLoan>,
+ *   monthsSaved: number,
+ *   interestSaved: number,
+ *   bounds: { minK: number, maxK: number, monthsAtFull: number }
+ * }}
+ */
+export function previewFixedAmountAbonoPlan({
+  principal,
+  annualRate,
+  years,
+  amountPerAbono,
+  frequencyId,
+  startFromMonthOne = true,
+  strategy = 'reduce_term',
+  abonoCount
+}) {
+  const bounds = computeFixedAbonoCountBounds({
+    principal,
+    annualRate,
+    years,
+    amountPerAbono,
+    frequencyId,
+    startFromMonthOne,
+    strategy
+  });
+  if (!bounds) return null;
+
+  const kRaw = Math.floor(Number(abonoCount));
+  const k = Math.min(Math.max(1, kRaw), bounds.maxK);
+  const totalMonths = Math.max(1, Math.floor(years * 12));
+  const monthsBetween = getMonthsBetweenAbonos(
+    /** @type {'monthly' | 'bimonthly' | 'quarterly' | 'semiannual' | 'annual'} */ (frequencyId)
+  );
+  const scheduledMonths = buildScheduledAbonoMonths(totalMonths, monthsBetween, k, startFromMonthOne);
+  const extras = scheduledMonths.map((month) => ({ month, amount: amountPerAbono, strategy }));
+  const scenario = simulateLoan({ principal, annualRate, years, extras });
+  const baseline = simulateLoan({ principal, annualRate, years, extras: [] });
+
+  return {
+    scheduledMonths,
+    scenario,
+    baseline,
+    monthsSaved: Math.max(0, baseline.totalMonthsUsed - scenario.totalMonthsUsed),
+    interestSaved: Math.max(0, baseline.totalInterest - scenario.totalInterest),
+    bounds,
+    abonoCountUsed: k
+  };
+}
