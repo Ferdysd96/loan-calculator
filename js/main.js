@@ -65,6 +65,12 @@ function findNextAvailableMonth() {
   return Math.max(...months) + 1;
 }
 
+function findNextAvailableAmount() {
+  const extras = collectExtras();
+  const lastExtra = extras[extras.length - 1];
+  return lastExtra ? lastExtra.amount : 0;
+}
+
 /**
  * @param {object} data
  * @param {{ skipRender?: boolean }} [options]
@@ -72,6 +78,7 @@ function findNextAvailableMonth() {
 function addExtraRow(data = {}, options = {}) {
   const clone = template.content.firstElementChild.cloneNode(true);
   let nextAvailableMonth = 1;
+  let nextAvailableAmount = 0;
   clone.dataset.id = String(++extraSequence);
 
   const monthSelect = clone.querySelector('.extra-month');
@@ -83,8 +90,12 @@ function addExtraRow(data = {}, options = {}) {
     nextAvailableMonth = findNextAvailableMonth();
   }
 
+  if (!data.amount) {
+    nextAvailableAmount = findNextAvailableAmount();
+  }
+
   fillMonthOptions(monthSelect, data.month || nextAvailableMonth);
-  amountInput.value = data.amount ?? '';
+  amountInput.value = data.amount ?? nextAvailableAmount;
   strategySelect.value = data.strategy || 'reduce_term';
 
   monthSelect.addEventListener('change', render);
@@ -157,7 +168,15 @@ function renderTable(rows) {
     const balanceCell = document.createElement('td');
     balanceCell.textContent = formatCurrency(row.balance);
 
-    tr.append(monthCell, paymentCell, interestCell, principalCell, balanceCell);
+    const nextRegularCell = document.createElement('td');
+    nextRegularCell.textContent =
+      row.scheduledNextRegular !== undefined ? formatCurrency(row.scheduledNextRegular) : formatCurrency(0);
+
+    const monthsLeftCell = document.createElement('td');
+    monthsLeftCell.textContent =
+      row.scheduleMonthsRemaining !== undefined ? formatNumber(row.scheduleMonthsRemaining) : '0';
+
+    tr.append(monthCell, paymentCell, interestCell, principalCell, balanceCell, nextRegularCell);
     fragment.appendChild(tr);
   });
 

@@ -43,7 +43,7 @@ function downloadExcelFromScenario(ctx, formatCurrency, formatNumber) {
     )}</td></tr>`;
   }
 
-  const thead = `<tr>${['Mes', 'Cuota', 'Interés', 'Capital', 'Saldo pendiente', 'Abono extra']
+  const thead = `<tr>${['Mes', 'Cuota', 'Interés', 'Capital', 'Saldo pendiente', 'Próx. cuota regular', 'Meses restantes', 'Abono extra']
     .map(
       (h) =>
         `<th style="background-color:${headerBg};color:${headerFg};border:1px solid ${headerBg};padding:8px 10px;text-align:left;">${escapeHtml(
@@ -57,6 +57,9 @@ function downloadExcelFromScenario(ctx, formatCurrency, formatNumber) {
       const bg = row.hasExtra ? rowExtraBg : rowNormalBg;
       const abono = row.hasExtra ? formatCurrency(row.extraApplied) : '—';
       const mes = row.hasExtra ? `${row.month} (abono)` : String(row.month);
+      const nextReg = row.scheduledNextRegular !== undefined ? formatCurrency(row.scheduledNextRegular) : formatCurrency(0);
+      const mesesRest =
+        row.scheduleMonthsRemaining !== undefined ? formatNumber(row.scheduleMonthsRemaining) : '0';
       return (
         `<tr style="background-color:${bg};">` +
         `<td style="border:1px solid ${border};padding:6px 10px;">${escapeHtml(mes)}</td>` +
@@ -64,6 +67,8 @@ function downloadExcelFromScenario(ctx, formatCurrency, formatNumber) {
         `<td style="border:1px solid ${border};padding:6px 10px;">${escapeHtml(formatCurrency(row.interest))}</td>` +
         `<td style="border:1px solid ${border};padding:6px 10px;">${escapeHtml(formatCurrency(row.principal))}</td>` +
         `<td style="border:1px solid ${border};padding:6px 10px;">${escapeHtml(formatCurrency(row.balance))}</td>` +
+        `<td style="border:1px solid ${border};padding:6px 10px;">${escapeHtml(nextReg)}</td>` +
+        `<td style="border:1px solid ${border};padding:6px 10px;">${escapeHtml(mesesRest)}</td>` +
         `<td style="border:1px solid ${border};padding:6px 10px;">${escapeHtml(abono)}</td>` +
         `</tr>`
       );
@@ -154,14 +159,16 @@ function buildPdfFromScenario(ctx, formatCurrency, formatNumber) {
     formatCurrency(row.payment),
     formatCurrency(row.interest),
     formatCurrency(row.principal),
-    formatCurrency(row.balance)
+    formatCurrency(row.balance),
+    row.scheduledNextRegular !== undefined ? formatCurrency(row.scheduledNextRegular) : formatCurrency(0),
+    row.scheduleMonthsRemaining !== undefined ? formatNumber(row.scheduleMonthsRemaining) : '0'
   ]);
 
   const abonoRowFill = [238, 244, 255];
 
   doc.autoTable({
     startY: y,
-    head: [['Mes', 'Cuota', 'Interés', 'Capital', 'Saldo pendiente']],
+    head: [['Mes', 'Cuota', 'Interés', 'Capital', 'Saldo pendiente', 'Próx. cuota', 'Meses rest.']],
     body,
     styles: { fontSize: 8, cellPadding: 1.8, textColor: [22, 48, 74] },
     headStyles: { fillColor: [17, 33, 63], textColor: 255 },

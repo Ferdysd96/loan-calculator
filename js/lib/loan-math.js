@@ -102,7 +102,9 @@ export function simulateLoan({ principal, annualRate, years, extras }) {
       principal: regularPrincipal + monthExtraApplied,
       balance,
       hasExtra: monthExtraApplied > 0,
-      extraApplied: monthExtraApplied
+      extraApplied: monthExtraApplied,
+      scheduledNextRegular: balance <= 0.000001 ? 0 : nextPayment,
+      scheduleMonthsRemaining: balance <= 0.000001 ? 0 : futureMonths
     });
 
     currentPayment = nextPayment;

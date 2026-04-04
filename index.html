@@ -109,7 +109,7 @@
           <div class="table-toolbar">
             <div>
               <h2 class="section-title" style="margin-bottom:6px;">Tabla de amortización</h2>
-              <p class="mini-note">Los abonos extraordinarios se aplican directamente a capital y actualizan la proyección en tiempo real.</p>
+              <p class="mini-note">Los abonos se aplican a capital y actualizan la proyección en tiempo real. Las columnas «Próx. cuota regular» y «Meses restantes» muestran cómo queda el mes siguiente según la estrategia (reducir cuota vs reducir plazo), incluso con abonos en meses consecutivos.</p>
             </div>
             <div class="table-toolbar-actions">
               <span class="mini-note table-row-count" id="tableSummary">0 filas</span>
@@ -128,7 +128,8 @@
                   <th>Cuota</th>
                   <th>Interés</th>
                   <th>Capital</th>
-                  <th>Saldo pendiente</th>
+                  <th title="Saldo después del pago y abonos de este mes">Saldo pendiente</th>
+                  <th title="Cuota regular del mes siguiente, antes de cualquier abono extra en ese mes">Próx. cuota</th>
                 </tr>
               </thead>
               <tbody id="amortizationBody"></tbody>
@@ -144,6 +145,7 @@
           <li><strong>Reducir plazo:</strong> mantiene la cuota base y acorta la duración del préstamo.</li>
           <li><strong>Reducir cuota:</strong> mantiene el plazo restante y recalcula una cuota menor para los meses futuros.</li>
           <li>Las estrategias se aplican después de la cuota normal del mes y después del abono extraordinario.</li>
+          <li>En la tabla, «Próx. cuota» es la cuota base del mes siguiente (sin sumar el abono de ese mes). «Meses restantes» baja con “reducir plazo” y suele mantenerse con “reducir cuota”.</li>
           <li>Si el préstamo se liquida antes, los abonos programados para meses posteriores se ignoran.</li>
         </ul>
 
