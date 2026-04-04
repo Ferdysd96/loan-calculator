@@ -173,29 +173,35 @@ export function getMonthsBetweenAbonos(frequencyId) {
  * Máximo de abonos posibles según cuotas totales y espaciado.
  * @param {number} totalMonths
  * @param {number} monthsBetween
+ * @param {boolean} [startFromMonthOne=true] Si es true, el primer abono es el mes 1 y luego cada `monthsBetween`.
+ *   Si es false, el primer abono cae en el primer múltiplo de la frecuencia (p. ej. mes 6 si es semestral).
  * @returns {number}
  */
-export function maxScheduledAbonoCount(totalMonths, monthsBetween) {
+export function maxScheduledAbonoCount(totalMonths, monthsBetween, startFromMonthOne = true) {
   const n = Math.max(1, Math.floor(totalMonths));
   const step = Math.max(1, Math.floor(monthsBetween));
+  if (startFromMonthOne) {
+    return Math.max(0, Math.floor((n - 1) / step) + 1);
+  }
   return Math.max(0, Math.floor(n / step));
 }
 
 /**
- * Meses en los que cae cada abono (1-based), empezando en el mes 1.
+ * Meses en los que cae cada abono (1-based).
  * @param {number} totalMonths
  * @param {number} monthsBetween
  * @param {number} count
+ * @param {boolean} [startFromMonthOne=true] Misma semántica que {@link maxScheduledAbonoCount}.
  * @returns {number[]}
  */
-export function buildScheduledAbonoMonths(totalMonths, monthsBetween, count) {
+export function buildScheduledAbonoMonths(totalMonths, monthsBetween, count, startFromMonthOne = true) {
   const n = Math.max(1, Math.floor(totalMonths));
   const step = Math.max(1, Math.floor(monthsBetween));
-  const maxCount = maxScheduledAbonoCount(n, step);
+  const maxCount = maxScheduledAbonoCount(n, step, startFromMonthOne);
   const k = Math.min(Math.max(0, Math.floor(count)), maxCount);
   const months = [];
   for (let i = 0; i < k; i++) {
-    const m = 1 + i * step;
+    const m = startFromMonthOne ? 1 + i * step : (i + 1) * step;
     if (m <= n) months.push(m);
   }
   return months;

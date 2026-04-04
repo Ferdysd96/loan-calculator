@@ -46,14 +46,21 @@ const scheduledCount = document.getElementById('scheduledCount');
 const scheduledAmount = document.getElementById('scheduledAmount');
 const scheduledAmountHint = document.getElementById('scheduledAmountHint');
 const scheduledStrategy = document.getElementById('scheduledStrategy');
+const scheduledStartFromMonthOne = document.getElementById('scheduledStartFromMonthOne');
 const scheduledPreview = document.getElementById('scheduledPreview');
 const closeScheduledAbonosBtn = document.getElementById('closeScheduledAbonosBtn');
 const cancelScheduledAbonosBtn = document.getElementById('cancelScheduledAbonosBtn');
 const confirmScheduledAbonosBtn = document.getElementById('confirmScheduledAbonosBtn');
 const resetScheduledAbonosBtn = document.getElementById('resetScheduledAbonosBtn');
+const scheduledReplaceConfirmBackdrop = document.getElementById('scheduledReplaceConfirmBackdrop');
+const scheduledReplaceConfirmModal = document.getElementById('scheduledReplaceConfirmModal');
+const closeScheduledReplaceConfirmBtn = document.getElementById('closeScheduledReplaceConfirmBtn');
+const cancelScheduledReplaceConfirmBtn = document.getElementById('cancelScheduledReplaceConfirmBtn');
+const applyScheduledReplaceConfirmBtn = document.getElementById('applyScheduledReplaceConfirmBtn');
 
 let extraSequence = 0;
 let scheduledModalLastFocus = null;
+let scheduledReplaceConfirmLastFocus = null;
 
 initCurrencySelect(currencySelect);
 
@@ -169,6 +176,13 @@ function setScheduledModalOpen(open) {
       scheduledAmount.focus();
     }, 0);
   } else {
+    if (scheduledReplaceConfirmModal.classList.contains('is-open')) {
+      scheduledReplaceConfirmBackdrop.classList.remove('is-open');
+      scheduledReplaceConfirmBackdrop.setAttribute('aria-hidden', 'true');
+      scheduledReplaceConfirmModal.classList.remove('is-open');
+      scheduledReplaceConfirmModal.setAttribute('aria-hidden', 'true');
+      scheduledReplaceConfirmLastFocus = null;
+    }
     scheduledAbonosBackdrop.classList.remove('is-open');
     scheduledAbonosBackdrop.setAttribute('aria-hidden', 'true');
     scheduledAbonosModal.classList.remove('is-open');
@@ -189,7 +203,8 @@ function refreshScheduledModal() {
   const monthsBetween = getMonthsBetweenAbonos(
     /** @type {'monthly' | 'bimonthly' | 'quarterly' | 'semiannual' | 'annual'} */ (scheduledFrequency.value)
   );
-  const maxCount = maxScheduledAbonoCount(totalMonths, monthsBetween);
+  const startFromMonthOne = scheduledStartFromMonthOne.checked;
+  const maxCount = maxScheduledAbonoCount(totalMonths, monthsBetween, startFromMonthOne);
 
   const prevCount = parseInt(scheduledCount.value, 10);
   scheduledCount.innerHTML = '';
@@ -214,7 +229,8 @@ function refreshScheduledModal() {
 
   const rawCount = parseInt(scheduledCount.value, 10);
   const count = maxCount === 0 ? 0 : Number.isFinite(rawCount) ? rawCount : 1;
-  const scheduledMonths = maxCount === 0 ? [] : buildScheduledAbonoMonths(totalMonths, monthsBetween, count);
+  const scheduledMonths =
+    maxCount === 0 ? [] : buildScheduledAbonoMonths(totalMonths, monthsBetween, count, startFromMonthOne);
   const maxExtra =
     principal > 0 && scheduledMonths.length
       ? computeMaxUniformExtraAmount({ principal, annualRate, years, scheduledMonths })
@@ -273,60 +289,114 @@ function resetScheduledModalDefaults() {
   scheduledFrequency.value = 'monthly';
   scheduledAmount.value = '';
   scheduledStrategy.value = 'reduce_term';
+  scheduledStartFromMonthOne.checked = true;
   refreshScheduledModal();
   const totalMonths = Math.max(1, Math.floor(toNumber(termYearsInput.value))) * 12;
-  const maxCount = maxScheduledAbonoCount(totalMonths, getMonthsBetweenAbonos('monthly'));
+  const maxCount = maxScheduledAbonoCount(totalMonths, getMonthsBetweenAbonos('monthly'), true);
   if (maxCount > 0 && !scheduledCount.disabled) {
     scheduledCount.value = String(maxCount);
     refreshScheduledModal();
   }
 }
 
-function confirmScheduledAbonos() {
+/**
+ * Valida y devuelve datos para aplicar abonos programados, o null si hay error (toast ya mostrado).
+ * @returns {{ scheduledMonths: number[], amount: number, strategy: string } | null}
+ */
+function getScheduledApplyPayload() {
   const principal = Math.max(0, toNumber(loanAmountInput.value));
   const annualRate = Math.max(0, toNumber(annualRateInput.value));
   const years = Math.max(1, Math.floor(toNumber(termYearsInput.value)));
   if (principal <= 0) {
     showToast('Indica un monto de préstamo mayor que cero.', { title: 'Datos incompletos', variant: 'error' });
-    return;
+    return null;
   }
 
   const totalMonths = years * 12;
   const monthsBetween = getMonthsBetweenAbonos(
     /** @type {'monthly' | 'bimonthly' | 'quarterly' | 'semiannual' | 'annual'} */ (scheduledFrequency.value)
   );
-  const maxCount = maxScheduledAbonoCount(totalMonths, monthsBetween);
+  const startFromMonthOne = scheduledStartFromMonthOne.checked;
+  const maxCount = maxScheduledAbonoCount(totalMonths, monthsBetween, startFromMonthOne);
   const rawCount = parseInt(scheduledCount.value, 10);
   const count = maxCount === 0 ? 0 : Number.isFinite(rawCount) ? rawCount : 1;
-  const scheduledMonths = maxCount === 0 ? [] : buildScheduledAbonoMonths(totalMonths, monthsBetween, count);
+  const scheduledMonths =
+    maxCount === 0 ? [] : buildScheduledAbonoMonths(totalMonths, monthsBetween, count, startFromMonthOne);
   const maxExtra = computeMaxUniformExtraAmount({ principal, annualRate, years, scheduledMonths });
   let amount = Math.max(0, toNumber(scheduledAmount.value));
   if (maxExtra > 0) amount = Math.min(amount, maxExtra);
 
   if (!scheduledMonths.length || maxExtra <= 0) {
-    showToast('No hay meses válidos o saldo aplicable para estos abonos.', { title: 'No se puede aplicar', variant: 'error' });
-    return;
+    showToast('No hay meses válidos o saldo aplicable para estos abonos.', {
+      title: 'No se puede aplicar',
+      variant: 'error'
+    });
+    return null;
   }
   if (amount <= 0) {
     showToast('Indica un monto mayor que cero.', { title: 'Monto requerido', variant: 'error' });
-    return;
+    return null;
   }
 
-  if (hasExistingExtras()) {
-    const ok = window.confirm(
-      'Se eliminarán todos los abonos extraordinarios actuales y se generarán los abonos programados. ¿Deseas continuar?'
-    );
-    if (!ok) return;
-  }
+  return {
+    scheduledMonths,
+    amount,
+    strategy: scheduledStrategy.value
+  };
+}
 
-  const strategy = scheduledStrategy.value;
+/**
+ * @param {{ scheduledMonths: number[], amount: number, strategy: string }} payload
+ */
+function executeScheduledApply(payload) {
+  const { scheduledMonths, amount, strategy } = payload;
   extrasList.innerHTML = '';
   scheduledMonths.forEach((month, i) => {
     addExtraRow({ month, amount, strategy }, { skipRender: i < scheduledMonths.length - 1 });
   });
 
+  setScheduledReplaceConfirmOpen(false);
   setScheduledModalOpen(false);
   showToast('Se aplicaron los abonos programados y se actualizó la tabla.', { title: 'Abonos programados' });
+}
+
+function setScheduledReplaceConfirmOpen(open) {
+  if (open) {
+    scheduledReplaceConfirmLastFocus =
+      document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    scheduledAbonosModal.setAttribute('aria-hidden', 'true');
+    scheduledReplaceConfirmBackdrop.classList.add('is-open');
+    scheduledReplaceConfirmBackdrop.setAttribute('aria-hidden', 'false');
+    scheduledReplaceConfirmModal.classList.add('is-open');
+    scheduledReplaceConfirmModal.setAttribute('aria-hidden', 'false');
+    window.setTimeout(() => {
+      cancelScheduledReplaceConfirmBtn.focus();
+    }, 0);
+  } else {
+    scheduledReplaceConfirmBackdrop.classList.remove('is-open');
+    scheduledReplaceConfirmBackdrop.setAttribute('aria-hidden', 'true');
+    scheduledReplaceConfirmModal.classList.remove('is-open');
+    scheduledReplaceConfirmModal.setAttribute('aria-hidden', 'true');
+    if (scheduledAbonosModal.classList.contains('is-open')) {
+      scheduledAbonosModal.setAttribute('aria-hidden', 'false');
+    }
+    if (scheduledReplaceConfirmLastFocus && typeof scheduledReplaceConfirmLastFocus.focus === 'function') {
+      scheduledReplaceConfirmLastFocus.focus();
+    }
+    scheduledReplaceConfirmLastFocus = null;
+  }
+}
+
+function confirmScheduledAbonos() {
+  const payload = getScheduledApplyPayload();
+  if (!payload) return;
+
+  if (hasExistingExtras()) {
+    setScheduledReplaceConfirmOpen(true);
+    return;
+  }
+
+  executeScheduledApply(payload);
 }
 
 function renderTable(rows) {
@@ -518,13 +588,32 @@ cancelScheduledAbonosBtn.addEventListener('click', () => setScheduledModalOpen(f
 confirmScheduledAbonosBtn.addEventListener('click', confirmScheduledAbonos);
 resetScheduledAbonosBtn.addEventListener('click', resetScheduledModalDefaults);
 
+closeScheduledReplaceConfirmBtn.addEventListener('click', () => setScheduledReplaceConfirmOpen(false));
+cancelScheduledReplaceConfirmBtn.addEventListener('click', () => setScheduledReplaceConfirmOpen(false));
+applyScheduledReplaceConfirmBtn.addEventListener('click', () => {
+  const payload = getScheduledApplyPayload();
+  if (!payload) {
+    setScheduledReplaceConfirmOpen(false);
+    return;
+  }
+  executeScheduledApply(payload);
+});
+scheduledReplaceConfirmBackdrop.addEventListener('click', () => setScheduledReplaceConfirmOpen(false));
+
 scheduledFrequency.addEventListener('change', refreshScheduledModal);
 scheduledCount.addEventListener('change', refreshScheduledModal);
 scheduledAmount.addEventListener('input', refreshScheduledModal);
 scheduledStrategy.addEventListener('change', refreshScheduledModal);
+scheduledStartFromMonthOne.addEventListener('change', refreshScheduledModal);
 
 document.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape' && scheduledAbonosModal.classList.contains('is-open')) {
+  if (e.key !== 'Escape') return;
+  if (scheduledReplaceConfirmModal.classList.contains('is-open')) {
+    e.preventDefault();
+    setScheduledReplaceConfirmOpen(false);
+    return;
+  }
+  if (scheduledAbonosModal.classList.contains('is-open')) {
     e.preventDefault();
     setScheduledModalOpen(false);
   }

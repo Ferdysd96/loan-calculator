@@ -224,6 +224,21 @@
             <option value="annual">Anual</option>
           </select>
         </div>
+        <div class="modal__field-checkbox">
+          <label class="modal__checkbox-label" for="scheduledStartFromMonthOne">
+            <input
+              type="checkbox"
+              id="scheduledStartFromMonthOne"
+              checked
+              aria-describedby="scheduledStartFromMonthOneHint"
+            />
+            <span>Primer abono en el mes 1</span>
+          </label>
+          <p class="modal__hint" id="scheduledStartFromMonthOneHint">
+            Si lo desmarcas, el primero cae en el primer múltiplo de la frecuencia (p. ej. mes 6 en semestral: 6, 12,
+            18…).
+          </p>
+        </div>
         <div>
           <label for="scheduledCount">Cantidad de abonos</label>
           <select id="scheduledCount" aria-label="Cantidad de abonos"></select>
@@ -258,6 +273,53 @@
         <div class="modal__actions-main">
           <button type="button" class="btn-secondary" id="cancelScheduledAbonosBtn">Cancelar</button>
           <button type="button" class="btn" id="confirmScheduledAbonosBtn">Aplicar abonos</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div
+    class="modal-backdrop modal-backdrop--layered"
+    id="scheduledReplaceConfirmBackdrop"
+    role="presentation"
+    aria-hidden="true"
+  ></div>
+  <div
+    class="modal modal--layered"
+    id="scheduledReplaceConfirmModal"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="scheduledReplaceConfirmTitle"
+    aria-describedby="scheduledReplaceConfirmDesc"
+    aria-hidden="true"
+  >
+    <div class="modal__panel modal__panel--confirm">
+      <div class="modal__head">
+        <h2 class="modal__title" id="scheduledReplaceConfirmTitle">Reemplazar abonos extraordinarios</h2>
+        <button
+          type="button"
+          class="modal__close"
+          id="closeScheduledReplaceConfirmBtn"
+          aria-label="Cerrar"
+        >
+          ×
+        </button>
+      </div>
+      <div class="modal__body">
+        <div class="modal__confirm-callout" role="status">
+          <span class="modal__confirm-callout-icon" aria-hidden="true">!</span>
+          <p class="modal__confirm-callout-text" id="scheduledReplaceConfirmDesc">
+            Ya tienes abonos extraordinarios configurados a mano. Si continúas, se quitarán todos y se insertarán los
+            abonos programados de la vista previa (mismos meses, montos y estrategia).
+          </p>
+        </div>
+        <p class="modal__lead modal__lead--tight">Esta acción no se puede deshacer desde la app; podrás volver a
+          editar los abonos después.</p>
+      </div>
+      <div class="modal__actions modal__actions--confirm">
+        <button type="button" class="btn-secondary" id="cancelScheduledReplaceConfirmBtn">Volver</button>
+        <div class="modal__actions-main">
+          <button type="button" class="btn" id="applyScheduledReplaceConfirmBtn">Sí, reemplazar</button>
         </div>
       </div>
     </div>

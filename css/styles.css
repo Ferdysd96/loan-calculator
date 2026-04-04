@@ -1074,6 +1074,34 @@
     margin-bottom: 6px;
   }
 
+  .modal__field-checkbox {
+    padding-top: 2px;
+  }
+
+  .modal__field-checkbox .modal__hint {
+    margin-top: 6px;
+  }
+
+  .modal__checkbox-label {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    margin: 0;
+    font-size: 0.92rem;
+    line-height: 1.45;
+    cursor: pointer;
+    color: var(--text);
+  }
+
+  .modal__checkbox-label input {
+    margin: 0.2em 0 0;
+    flex-shrink: 0;
+    width: 1.05em;
+    height: 1.05em;
+    accent-color: var(--accent, #2563eb);
+    cursor: pointer;
+  }
+
   .modal__hint {
     margin: 8px 0 0;
     font-size: 0.82rem;
@@ -1161,5 +1189,89 @@
 
     .fab-schedule:hover {
       transform: none;
+    }
+  }
+
+  /* Confirmación encima del modal de abonos programados */
+  .modal-backdrop--layered {
+    z-index: 10002;
+    background: rgba(17, 33, 63, 0.55);
+  }
+
+  .modal--layered {
+    z-index: 10003;
+  }
+
+  .modal__panel--confirm {
+    width: min(420px, 100%);
+    max-height: min(88vh, 520px);
+  }
+
+  .modal__confirm-callout {
+    display: flex;
+    gap: 14px;
+    align-items: flex-start;
+    padding: 14px 16px;
+    margin: 0 0 14px;
+    border-radius: 14px;
+    border: 1px solid rgba(234, 179, 8, 0.45);
+    background: linear-gradient(135deg, rgba(254, 252, 232, 0.95), rgba(255, 251, 235, 0.98));
+    box-shadow: 0 1px 0 rgba(255, 255, 255, 0.6) inset;
+  }
+
+  .modal__confirm-callout-icon {
+    flex-shrink: 0;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 800;
+    font-size: 0.95rem;
+    line-height: 1;
+    color: #92400e;
+    background: rgba(251, 191, 36, 0.35);
+    border: 1px solid rgba(217, 119, 6, 0.35);
+  }
+
+  .modal__confirm-callout-text {
+    margin: 0;
+    font-size: 0.92rem;
+    line-height: 1.55;
+    color: var(--text);
+  }
+
+  .modal__lead--tight {
+    margin-bottom: 0;
+    font-size: 0.88rem;
+  }
+
+  .modal__actions--confirm {
+    justify-content: flex-end;
+  }
+
+  .modal__actions--confirm .modal__actions-main {
+    margin-left: 0;
+  }
+
+  @media (max-width: 520px) {
+    .modal__actions--confirm {
+      flex-direction: column-reverse;
+      align-items: stretch;
+    }
+
+    .modal__actions--confirm .modal__actions-main {
+      width: 100%;
+    }
+
+    .modal__actions--confirm .modal__actions-main .btn {
+      width: 100%;
+      min-height: 44px;
+    }
+
+    .modal__actions--confirm .btn-secondary {
+      width: 100%;
+      min-height: 44px;
     }
   }
