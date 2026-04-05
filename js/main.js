@@ -69,6 +69,8 @@ const applyScheduledReplaceConfirmBtn = document.getElementById('applyScheduledR
 let extraSequence = 0;
 let scheduledModalLastFocus = null;
 let scheduledReplaceConfirmLastFocus = null;
+/** @type {number | null} Último maxK válido del tab «monto fijo», para detectar cambios de rango. */
+let lastScheduledFixedMaxK = null;
 
 initCurrencySelect(currencySelect);
 
@@ -351,7 +353,7 @@ function populateFixedAbonoCountOptions(minK, maxK, preferred) {
     opt.textContent = `${k} abono${k === 1 ? '' : 's'}`;
     fixedAbonoCount.appendChild(opt);
   }
-  let use = minK;
+  let use = maxK;
   if (Number.isFinite(preferred) && preferred >= minK && preferred <= maxK) use = preferred;
   fixedAbonoCount.value = String(use);
 }
@@ -377,6 +379,7 @@ function refreshScheduledModalFixed() {
     confirmScheduledAbonosBtn.disabled = true;
     fixedAbonoCount.innerHTML = '';
     fixedAbonoCount.disabled = true;
+    lastScheduledFixedMaxK = null;
     return;
   }
 
@@ -385,6 +388,7 @@ function refreshScheduledModalFixed() {
     confirmScheduledAbonosBtn.disabled = true;
     fixedAbonoCount.innerHTML = '';
     fixedAbonoCount.disabled = true;
+    lastScheduledFixedMaxK = null;
     return;
   }
 
@@ -393,6 +397,7 @@ function refreshScheduledModalFixed() {
     confirmScheduledAbonosBtn.disabled = true;
     fixedAbonoCount.innerHTML = '';
     fixedAbonoCount.disabled = true;
+    lastScheduledFixedMaxK = null;
     return;
   }
 
@@ -412,15 +417,20 @@ function refreshScheduledModalFixed() {
     confirmScheduledAbonosBtn.disabled = true;
     fixedAbonoCount.innerHTML = '';
     fixedAbonoCount.disabled = true;
+    lastScheduledFixedMaxK = null;
     return;
   }
 
   const prevK = parseInt(fixedAbonoCount.value, 10);
-  populateFixedAbonoCountOptions(
-    1,
-    bounds.maxK,
-    Number.isFinite(prevK) ? prevK : 1
-  );
+  const maxKChanged = lastScheduledFixedMaxK !== bounds.maxK;
+  lastScheduledFixedMaxK = bounds.maxK;
+
+  let preferred = bounds.maxK;
+  if (Number.isFinite(prevK) && prevK >= 1 && prevK <= bounds.maxK && !maxKChanged) {
+    preferred = prevK;
+  }
+
+  populateFixedAbonoCountOptions(1, bounds.maxK, preferred);
   fixedAbonoCount.disabled = false;
 
   const k = parseInt(fixedAbonoCount.value, 10);
@@ -493,6 +503,7 @@ function resetScheduledModalDefaults() {
   fixedAbonoStartFromMonthOne.checked = true;
   fixedAbonoStrategy.value = 'reduce_term';
   fixedAbonoAmount.value = '';
+  lastScheduledFixedMaxK = null;
   const totalMonths = Math.max(1, Math.floor(toNumber(termYearsInput.value))) * 12;
   scheduledTargetMonths.value = String(Math.min(Math.max(1, totalMonths - 12), totalMonths));
   setScheduledTab('target');
