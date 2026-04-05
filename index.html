@@ -43,14 +43,80 @@
           </div>
 
           <div class="scenario-bar">
-            <details class="scenario-details">
-              <summary class="scenario-summary">Mis simulaciones</summary>
-              <div class="scenario-body">
-                <p class="scenario-help">Guarda tu simulación en un archivo o carga una previamente guardada. Incluye monto, tasa, plazo y abonos extraordinarios.</p>
-                <div class="scenario-actions">
-                  <button class="btn-secondary" id="exportDataBtn" type="button" title="Descargar escenario como archivo JSON">Guardar simulación</button>
-                  <button class="btn-secondary" id="importDataBtn" type="button" title="Cargar escenario desde un archivo JSON">Cargar simulación</button>
-                </div>
+            <details class="scenario-details" id="scenarioDetails">
+              <summary class="scenario-summary">
+                <span>
+                  Mis simulaciones
+                  <span id="simulationsCountBadge" class="scenario-summary__count" aria-live="polite">(0)</span>
+                </span>
+              </summary>
+              <div class="scenario-body scenario-dropzone" id="scenarioDropzone">
+                <p class="scenario-help">
+                  Usa <strong>Archivo</strong> para copiar escenarios entre dispositivos (JSON). Usa <strong>Este navegador</strong> para
+                  guardar una lista rápida solo en este equipo.
+                </p>
+
+                <section class="scenario-section" aria-labelledby="scenarioSectionFileTitle">
+                  <h3 class="scenario-section__title" id="scenarioSectionFileTitle">Archivo</h3>
+                  <p class="scenario-section__lead">Exporta o importa el mismo formato JSON en cualquier dispositivo.</p>
+                  <div class="scenario-actions">
+                    <button class="btn-secondary" id="exportDataBtn" type="button" title="Descargar escenario como archivo JSON">
+                      📄 Guardar en archivo
+                    </button>
+                    <button class="btn-secondary" id="importDataDirectBtn" type="button" title="Aplicar el JSON a la calculadora">
+                      📥 Cargar en calculadora
+                    </button>
+                    <button class="btn-secondary" id="importDataOptionsBtn" type="button" title="Guardar en la lista del navegador o cargar y guardar">
+                      ⚙ Importar con opciones…
+                    </button>
+                  </div>
+                  <p class="scenario-drop-hint">También puedes soltar un archivo <span class="mono">.json</span> aquí (se carga en la calculadora).</p>
+                </section>
+
+                <section class="scenario-section scenario-section--browser" aria-labelledby="scenarioSectionBrowserTitle">
+                  <h3 class="scenario-section__title" id="scenarioSectionBrowserTitle">Este navegador</h3>
+                  <p class="scenario-section__lead">Lista local: no se sincroniza con otros dispositivos ni con la nube.</p>
+                  <div class="scenario-save-row">
+                    <label class="scenario-save-label" for="simulationNameInput">Nombre</label>
+                    <input
+                      id="simulationNameInput"
+                      class="scenario-name-input"
+                      type="text"
+                      maxlength="30"
+                      autocomplete="off"
+                      placeholder="Ej. Casa 2026"
+                      aria-describedby="simulationNameHint simulationNameCounter"
+                    />
+                    <div class="scenario-name-meta">
+                      <span id="simulationNameHint" class="scenario-name-hint">Obligatorio al guardar · máx. 30 caracteres</span>
+                      <span id="simulationNameCounter" class="scenario-name-counter" aria-live="polite">0/30</span>
+                    </div>
+                    <button class="btn" id="saveSimulationLocalBtn" type="button" title="Guardar la simulación actual en este navegador">
+                      💾 Guardar en el navegador
+                    </button>
+                  </div>
+
+                  <div class="simulations-toolbar" id="simulationsToolbar" hidden>
+                    <label class="simulations-sort-label" for="simulationsSortSelect">Ordenar</label>
+                    <select id="simulationsSortSelect" class="simulations-sort-select" aria-label="Orden de la lista de simulaciones">
+                      <option value="date-desc">Más recientes primero</option>
+                      <option value="date-asc">Más antiguas primero</option>
+                      <option value="name-asc">Nombre (A–Z)</option>
+                      <option value="name-desc">Nombre (Z–A)</option>
+                    </select>
+                  </div>
+
+                  <div class="simulations-list-wrap">
+                    <p class="simulations-list-title">Simulaciones guardadas</p>
+                    <div id="simulationsList" class="simulations-list" role="list"></div>
+                    <div id="simulationsEmpty" class="simulations-empty" hidden>
+                      <p class="simulations-empty__title">Aún no hay simulaciones guardadas aquí.</p>
+                      <p class="simulations-empty__text">
+                        Escribe un nombre arriba y pulsa «Guardar en el navegador», o importa un JSON desde <strong>Archivo</strong>.
+                      </p>
+                    </div>
+                  </div>
+                </section>
               </div>
             </details>
             <input type="file" id="importDataFile" accept=".json,application/json" hidden />
@@ -369,7 +435,7 @@
       <div class="modal__actions">
         <button type="button" class="btn-secondary" id="resetScheduledAbonosBtn">Restablecer</button>
         <div class="modal__actions-main">
-          <button type="button" class="btn-secondary" id="cancelScheduledAbonosBtn">Cancelar</button>
+          <button type="button" class="btn-secondary" id="cancelScheduledAbonosBtn">Cerrar</button>
           <button type="button" class="btn" id="confirmScheduledAbonosBtn">Aplicar abonos</button>
         </div>
       </div>
@@ -418,6 +484,78 @@
         <button type="button" class="btn-secondary" id="cancelScheduledReplaceConfirmBtn">Volver</button>
         <div class="modal__actions-main">
           <button type="button" class="btn" id="applyScheduledReplaceConfirmBtn">Sí, reemplazar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-backdrop" id="importChoiceBackdrop" role="presentation" aria-hidden="true"></div>
+  <div
+    class="modal"
+    id="importChoiceModal"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="importChoiceTitle"
+    aria-hidden="true"
+  >
+    <div class="modal__panel">
+      <div class="modal__head">
+        <h2 class="modal__title" id="importChoiceTitle">Archivo JSON válido</h2>
+        <button type="button" class="modal__close" id="closeImportChoiceBtn" aria-label="Cerrar">×</button>
+      </div>
+      <div class="modal__body">
+        <p class="modal__lead modal__lead--tight" id="importChoiceLead">
+          Si solo querías aplicar el JSON, usa «Cargar en calculadora» desde Archivo. Aquí puedes guardar en la lista del
+          navegador o hacer ambas cosas.
+        </p>
+        <div class="modal__fields">
+          <div>
+            <label for="importChoiceNameInput">Nombre (para guardar en la lista)</label>
+            <input
+              id="importChoiceNameInput"
+              type="text"
+              maxlength="30"
+              autocomplete="off"
+              placeholder="Solo si guardas en el navegador"
+              aria-describedby="importChoiceNameHint"
+            />
+            <p class="modal__hint" id="importChoiceNameHint">Obligatorio al usar «Guardar en lista» o «Cargar y guardar».</p>
+          </div>
+        </div>
+      </div>
+      <footer class="modal__footer modal__footer--import-choice" role="group" aria-label="Acciones de importación">
+        <button type="button" class="btn-secondary modal__footer-btn" id="importChoiceSaveListBtn">Guardar en lista</button>
+        <button type="button" class="btn-secondary modal__footer-btn" id="importChoiceLoadOnlyBtn">Cargar en calculadora</button>
+        <button type="button" class="btn-secondary modal__footer-btn" id="cancelImportChoiceBtn">Cerrar</button>
+        <button type="button" class="btn modal__footer-btn modal__footer-btn--primary" id="importChoiceBothBtn">
+          Cargar y guardar
+        </button>
+      </footer>
+    </div>
+  </div>
+
+  <div class="modal-backdrop modal-backdrop--layered" id="deleteSimulationBackdrop" role="presentation" aria-hidden="true"></div>
+  <div
+    class="modal modal--layered"
+    id="deleteSimulationModal"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="deleteSimulationTitle"
+    aria-describedby="deleteSimulationDesc"
+    aria-hidden="true"
+  >
+    <div class="modal__panel modal__panel--confirm">
+      <div class="modal__head">
+        <h2 class="modal__title" id="deleteSimulationTitle">Eliminar simulación</h2>
+        <button type="button" class="modal__close" id="closeDeleteSimulationBtn" aria-label="Cerrar">×</button>
+      </div>
+      <div class="modal__body">
+        <p class="modal__lead modal__lead--tight" id="deleteSimulationDesc"></p>
+      </div>
+      <div class="modal__actions modal__actions--confirm">
+        <button type="button" class="btn-secondary" id="cancelDeleteSimulationBtn">Volver</button>
+        <div class="modal__actions-main">
+          <button type="button" class="btn" id="confirmDeleteSimulationBtn">Sí, eliminar</button>
         </div>
       </div>
     </div>

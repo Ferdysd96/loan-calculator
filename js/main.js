@@ -2,6 +2,16 @@ import { ALLOWED_CURRENCY_IDS, getCurrencyById, getCurrencyFormatter, initCurren
 import { formatNumber, toNumber } from './lib/format.js';
 import { buildLoanDataPayload, validateLoanImportPayload } from './lib/loan-data.js';
 import {
+  addSimulation,
+  getSimulationById,
+  loadSimulations,
+  newId,
+  removeSimulation,
+  restoreSimulation,
+  SIMULATION_NAME_MAX,
+  validateSimulationName
+} from './lib/simulations-store.js';
+import {
   buildExportScenarioFromInputs,
   simulateLoan,
   getMonthsBetweenAbonos,
@@ -10,7 +20,7 @@ import {
   computeFixedAbonoCountBounds,
   previewFixedAmountAbonoPlan
 } from './lib/loan-math.js';
-import { exportExcel, exportLoanDataJson, exportPdf } from './ui/exports.js';
+import { downloadLoanPayloadJson, exportExcel, exportLoanDataJson, exportPdf } from './ui/exports.js';
 import { createShowToast } from './ui/toast.js';
 
 const loanAmountInput = document.getElementById('loanAmount');
@@ -34,8 +44,32 @@ const tableSummary = document.getElementById('tableSummary');
 const exportPdfBtn = document.getElementById('exportPdfBtn');
 const exportExcelBtn = document.getElementById('exportExcelBtn');
 const exportDataBtn = document.getElementById('exportDataBtn');
-const importDataBtn = document.getElementById('importDataBtn');
+const importDataDirectBtn = document.getElementById('importDataDirectBtn');
+const importDataOptionsBtn = document.getElementById('importDataOptionsBtn');
 const importDataFile = document.getElementById('importDataFile');
+const scenarioDropzone = document.getElementById('scenarioDropzone');
+const simulationsCountBadge = document.getElementById('simulationsCountBadge');
+const simulationNameInput = document.getElementById('simulationNameInput');
+const simulationNameCounter = document.getElementById('simulationNameCounter');
+const saveSimulationLocalBtn = document.getElementById('saveSimulationLocalBtn');
+const simulationsList = document.getElementById('simulationsList');
+const simulationsEmpty = document.getElementById('simulationsEmpty');
+const simulationsSortSelect = document.getElementById('simulationsSortSelect');
+const simulationsToolbar = document.getElementById('simulationsToolbar');
+const importChoiceBackdrop = document.getElementById('importChoiceBackdrop');
+const importChoiceModal = document.getElementById('importChoiceModal');
+const closeImportChoiceBtn = document.getElementById('closeImportChoiceBtn');
+const cancelImportChoiceBtn = document.getElementById('cancelImportChoiceBtn');
+const importChoiceNameInput = document.getElementById('importChoiceNameInput');
+const importChoiceLoadOnlyBtn = document.getElementById('importChoiceLoadOnlyBtn');
+const importChoiceSaveListBtn = document.getElementById('importChoiceSaveListBtn');
+const importChoiceBothBtn = document.getElementById('importChoiceBothBtn');
+const deleteSimulationBackdrop = document.getElementById('deleteSimulationBackdrop');
+const deleteSimulationModal = document.getElementById('deleteSimulationModal');
+const deleteSimulationDesc = document.getElementById('deleteSimulationDesc');
+const closeDeleteSimulationBtn = document.getElementById('closeDeleteSimulationBtn');
+const cancelDeleteSimulationBtn = document.getElementById('cancelDeleteSimulationBtn');
+const confirmDeleteSimulationBtn = document.getElementById('confirmDeleteSimulationBtn');
 const currencySelect = document.getElementById('currencySelect');
 const toastRegion = document.getElementById('toastRegion');
 
@@ -66,7 +100,16 @@ const closeScheduledReplaceConfirmBtn = document.getElementById('closeScheduledR
 const cancelScheduledReplaceConfirmBtn = document.getElementById('cancelScheduledReplaceConfirmBtn');
 const applyScheduledReplaceConfirmBtn = document.getElementById('applyScheduledReplaceConfirmBtn');
 
+const SORT_STORAGE_KEY = 'loan-calculator-sim-sort';
+
 let extraSequence = 0;
+/** @type {{ loan: object, extras: Array<{ month: number, amount: number, strategy: string }> } | null} */
+let pendingImportValidated = null;
+/** @type {'direct' | 'modal'} */
+let importFileIntent = 'direct';
+let importModalLastFocus = null;
+let deleteModalLastFocus = null;
+let deleteSimulationTargetId = null;
 let scheduledModalLastFocus = null;
 let scheduledReplaceConfirmLastFocus = null;
 /** @type {number | null} Último maxK válido del tab «monto fijo», para detectar cambios de rango. */
@@ -816,34 +859,344 @@ function applyImportedLoan(loan, extras) {
   render();
 }
 
+function slugifyFilenamePart(name) {
+  return String(name)
+    .replace(/[<>:"/\\|?*\u0000-\u001f]/g, '')
+    .replace(/\s+/g, '-')
+    .slice(0, 48) || 'simulacion';
+}
+
+function setImportChoiceOpen(open) {
+  if (open) {
+    importModalLastFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    importChoiceBackdrop.classList.add('is-open');
+    importChoiceBackdrop.setAttribute('aria-hidden', 'false');
+    importChoiceModal.classList.add('is-open');
+    importChoiceModal.setAttribute('aria-hidden', 'false');
+    document.body.style.overflow = 'hidden';
+    window.setTimeout(() => importChoiceNameInput.focus(), 0);
+  } else {
+    importChoiceBackdrop.classList.remove('is-open');
+    importChoiceBackdrop.setAttribute('aria-hidden', 'true');
+    importChoiceModal.classList.remove('is-open');
+    importChoiceModal.setAttribute('aria-hidden', 'true');
+    document.body.style.overflow = '';
+    pendingImportValidated = null;
+    importChoiceNameInput.value = '';
+    const refocus = importModalLastFocus;
+    importModalLastFocus = null;
+    window.setTimeout(() => {
+      if (refocus && document.body.contains(refocus)) refocus.focus();
+    }, 0);
+  }
+}
+
+function setDeleteSimulationOpen(open) {
+  if (open) {
+    deleteModalLastFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    deleteSimulationBackdrop.classList.add('is-open');
+    deleteSimulationBackdrop.setAttribute('aria-hidden', 'false');
+    deleteSimulationModal.classList.add('is-open');
+    deleteSimulationModal.setAttribute('aria-hidden', 'false');
+    document.body.style.overflow = 'hidden';
+  } else {
+    deleteSimulationBackdrop.classList.remove('is-open');
+    deleteSimulationBackdrop.setAttribute('aria-hidden', 'true');
+    deleteSimulationModal.classList.remove('is-open');
+    deleteSimulationModal.setAttribute('aria-hidden', 'true');
+    document.body.style.overflow = '';
+    deleteSimulationTargetId = null;
+    const refocus = deleteModalLastFocus;
+    deleteModalLastFocus = null;
+    window.setTimeout(() => {
+      if (refocus && document.body.contains(refocus)) refocus.focus();
+    }, 0);
+  }
+}
+
+function formatMoneyForSim(amount, currencyId) {
+  const id = currencyId && ALLOWED_CURRENCY_IDS.has(currencyId) ? currencyId : 'DOP';
+  return getCurrencyFormatter(getCurrencyById(id)).format(Number(amount));
+}
+
+function getSortKey() {
+  const v = simulationsSortSelect?.value;
+  if (v === 'date-desc' || v === 'date-asc' || v === 'name-asc' || v === 'name-desc') return v;
+  return 'date-desc';
+}
+
+/**
+ * @param {object[]} list
+ * @param {string} sortKey
+ */
+function sortSimulationsInPlace(list, sortKey) {
+  const byDate = (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+  const byName = (a, b) => a.name.localeCompare(b.name, 'es', { sensitivity: 'base' });
+  switch (sortKey) {
+    case 'date-asc':
+      list.sort((a, b) => byDate(a, b));
+      break;
+    case 'name-asc':
+      list.sort((a, b) => byName(a, b));
+      break;
+    case 'name-desc':
+      list.sort((a, b) => byName(b, a));
+      break;
+    case 'date-desc':
+    default:
+      list.sort((a, b) => byDate(b, a));
+  }
+}
+
+function updateSimulationsCountBadge(count) {
+  if (simulationsCountBadge) simulationsCountBadge.textContent = `(${count})`;
+}
+
+function updateSimulationNameCounter() {
+  if (!simulationNameCounter) return;
+  simulationNameCounter.textContent = `${simulationNameInput.value.length}/${SIMULATION_NAME_MAX}`;
+}
+
+function renderSimulationsList() {
+  const raw = loadSimulations();
+  updateSimulationsCountBadge(raw.length);
+  if (simulationsToolbar) simulationsToolbar.hidden = raw.length === 0;
+
+  const sortKey = getSortKey();
+  try {
+    localStorage.setItem(SORT_STORAGE_KEY, sortKey);
+  } catch {
+    /* ignore */
+  }
+
+  const list = raw.slice();
+  sortSimulationsInPlace(list, sortKey);
+
+  simulationsEmpty.hidden = list.length > 0;
+  simulationsList.innerHTML = '';
+
+  list.forEach((sim) => {
+    const card = document.createElement('article');
+    card.className = 'simulation-card';
+    card.setAttribute('role', 'listitem');
+
+    const main = document.createElement('div');
+    main.className = 'simulation-card__main';
+    const title = document.createElement('p');
+    title.className = 'simulation-card__name';
+    title.textContent = sim.name;
+    const meta = document.createElement('p');
+    meta.className = 'simulation-card__meta';
+    const nExtras = Array.isArray(sim.extras) ? sim.extras.length : 0;
+    const extrasLabel = nExtras === 1 ? '1 abono extra' : `${nExtras} abonos extra`;
+    meta.textContent = `${formatMoneyForSim(sim.loan.principal, sim.loan.currencyId)} · ${sim.loan.annualRatePercent}% · ${sim.loan.termYears} año(s) · ${extrasLabel}`;
+    const date = document.createElement('p');
+    date.className = 'simulation-card__date';
+    try {
+      date.textContent = `Creada: ${new Date(sim.createdAt).toLocaleString('es-DO', {
+        dateStyle: 'short',
+        timeStyle: 'short'
+      })}`;
+    } catch {
+      date.textContent = '';
+    }
+    main.append(title, meta, date);
+
+    const actions = document.createElement('div');
+    actions.className = 'simulation-card__actions';
+
+    const loadBtn = document.createElement('button');
+    loadBtn.type = 'button';
+    loadBtn.className = 'btn-secondary btn-mini';
+    loadBtn.title = 'Cargar en la calculadora';
+    loadBtn.setAttribute('aria-label', `Cargar la simulación «${sim.name}» en la calculadora`);
+    loadBtn.textContent = '📥 Cargar';
+    loadBtn.addEventListener('click', () => loadSimulationIntoForm(sim.id));
+
+    const dlBtn = document.createElement('button');
+    dlBtn.type = 'button';
+    dlBtn.className = 'btn-secondary btn-mini';
+    dlBtn.title = 'Descargar JSON';
+    dlBtn.setAttribute('aria-label', `Descargar «${sim.name}» como archivo JSON`);
+    dlBtn.textContent = '⬇️ Descargar';
+    dlBtn.addEventListener('click', () => downloadSavedSimulationJson(sim.id));
+
+    const delBtn = document.createElement('button');
+    delBtn.type = 'button';
+    delBtn.className = 'btn-secondary btn-mini';
+    delBtn.title = 'Eliminar';
+    delBtn.setAttribute('aria-label', `Eliminar la simulación «${sim.name}»`);
+    delBtn.textContent = 'Eliminar';
+    delBtn.addEventListener('click', () => openDeleteSimulationModal(sim.id, sim.name));
+
+    actions.append(loadBtn, dlBtn, delBtn);
+    card.append(main, actions);
+    simulationsList.appendChild(card);
+  });
+}
+
+function loadSimulationIntoForm(id) {
+  const sim = getSimulationById(id);
+  if (!sim) {
+    showToast('No se encontró esa simulación.', { title: 'Error', variant: 'error' });
+    renderSimulationsList();
+    return;
+  }
+  applyImportedLoan(sim.loan, sim.extras);
+  showToast('Los datos de la simulación se aplicaron a la calculadora.', { title: 'Simulación cargada' });
+}
+
+function downloadSavedSimulationJson(id) {
+  const sim = getSimulationById(id);
+  if (!sim) {
+    showToast('No se encontró esa simulación.', { title: 'Error', variant: 'error' });
+    return;
+  }
+  const payload = buildLoanDataPayload({
+    principal: sim.loan.principal,
+    annualRate: sim.loan.annualRatePercent,
+    years: sim.loan.termYears,
+    extras: sim.extras,
+    currencyId: sim.loan.currencyId
+  });
+  if (!payload) {
+    showToast('No se pudo generar el archivo JSON.', { title: 'Error', variant: 'error' });
+    return;
+  }
+  const fname = `prestamo-${slugifyFilenamePart(sim.name)}-${sim.createdAt.slice(0, 10)}.json`;
+  downloadLoanPayloadJson(payload, fname);
+  showToast('El archivo JSON se descargó correctamente.', { title: 'Descarga lista' });
+}
+
+function openDeleteSimulationModal(id, name) {
+  deleteSimulationTargetId = id;
+  deleteSimulationDesc.textContent = `¿Eliminar «${name}»? Podrás deshacer desde el aviso inferior.`;
+  setDeleteSimulationOpen(true);
+}
+
+function saveCurrentSimulationToLocal() {
+  const nameCheck = validateSimulationName(simulationNameInput.value);
+  if (!nameCheck.ok) {
+    showToast(nameCheck.error, { title: 'Nombre inválido', variant: 'error' });
+    simulationNameInput.focus();
+    return;
+  }
+
+  const payload = getLoanPayload();
+  if (!payload) {
+    showToast('Completa monto y plazo válidos antes de guardar.', { title: 'Datos incompletos', variant: 'error' });
+    return;
+  }
+
+  const result = validateLoanImportPayload(payload);
+  if (!result.ok) {
+    showToast(result.errors[0] || 'Datos no válidos.', { title: 'Error', variant: 'error' });
+    return;
+  }
+
+  try {
+    addSimulation({
+      id: newId(),
+      name: nameCheck.name,
+      createdAt: new Date().toISOString(),
+      loan: result.loan,
+      extras: result.extras
+    });
+    simulationNameInput.value = '';
+    updateSimulationNameCounter();
+    renderSimulationsList();
+    showToast('La simulación se guardó en este navegador.', { title: 'Guardada' });
+  } catch {
+    showToast('No se pudo guardar (p. ej. almacenamiento lleno o privado).', { title: 'Error', variant: 'error' });
+  }
+}
+
+/**
+ * @param {{ ok: true, loan: object, extras: Array<{ month: number, amount: number, strategy: string }> }} result
+ * @param {'direct' | 'modal'} intent
+ */
+function applyValidatedImportResult(result, intent) {
+  if (intent === 'direct') {
+    applyImportedLoan(result.loan, result.extras);
+    showToast('Los datos del archivo se aplicaron a la calculadora.', { title: 'Simulación cargada' });
+    return;
+  }
+  pendingImportValidated = { loan: result.loan, extras: result.extras };
+  importChoiceNameInput.value = '';
+  setImportChoiceOpen(true);
+}
+
+/**
+ * @param {string} text
+ * @param {'direct' | 'modal'} intent
+ */
+function processImportedJsonText(text, intent) {
+  let parsed;
+  try {
+    parsed = JSON.parse(String(text || ''));
+  } catch {
+    showToast('El archivo no es JSON válido.', { title: 'Error de lectura', variant: 'error' });
+    return;
+  }
+
+  const result = validateLoanImportPayload(parsed);
+  if (!result.ok) {
+    showToast(result.errors.join(' '), { title: 'Archivo no válido', variant: 'error' });
+    return;
+  }
+
+  applyValidatedImportResult(result, intent);
+}
+
 function handleImportFileChange(event) {
   const file = event.target.files && event.target.files[0];
   event.target.value = '';
   if (!file) return;
 
+  const intent = importFileIntent;
+  importFileIntent = 'direct';
+
   const reader = new FileReader();
-  reader.onload = () => {
-    let parsed;
-    try {
-      parsed = JSON.parse(String(reader.result || ''));
-    } catch {
-      alert('No se pudo leer el archivo. Comprueba que sea JSON válido.');
-      return;
-    }
-
-    const result = validateLoanImportPayload(parsed);
-    if (!result.ok) {
-      alert(`No se pudo cargar el escenario:\n\n${result.errors.join('\n')}`);
-      return;
-    }
-
-    applyImportedLoan(result.loan, result.extras);
-    showToast('Los datos del archivo se aplicaron a la calculadora.', { title: 'Simulación cargada' });
-  };
+  reader.onload = () => processImportedJsonText(String(reader.result || ''), intent);
   reader.onerror = () => {
-    alert('Error al leer el archivo.');
+    showToast('No se pudo leer el archivo.', { title: 'Error', variant: 'error' });
   };
   reader.readAsText(file, 'UTF-8');
+}
+
+function setupScenarioDropzone() {
+  if (!scenarioDropzone) return;
+
+  ['dragenter', 'dragover'].forEach((evName) => {
+    scenarioDropzone.addEventListener(evName, (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const dt = e.dataTransfer;
+      if (dt) dt.dropEffect = 'copy';
+      scenarioDropzone.classList.add('scenario-dropzone--over');
+    });
+  });
+
+  scenarioDropzone.addEventListener('dragleave', (e) => {
+    const next = e.relatedTarget;
+    if (next instanceof Node && scenarioDropzone.contains(next)) return;
+    scenarioDropzone.classList.remove('scenario-dropzone--over');
+  });
+
+  scenarioDropzone.addEventListener('drop', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    scenarioDropzone.classList.remove('scenario-dropzone--over');
+    const file = e.dataTransfer?.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = () => processImportedJsonText(String(reader.result || ''), 'direct');
+    reader.onerror = () => {
+      showToast('No se pudo leer el archivo.', { title: 'Error', variant: 'error' });
+    };
+    reader.readAsText(file, 'UTF-8');
+  });
 }
 
 const exportDeps = {
@@ -903,8 +1256,114 @@ clearExtrasBtn.addEventListener('click', () => {
 exportPdfBtn.addEventListener('click', () => exportPdf(exportDeps));
 exportExcelBtn.addEventListener('click', () => exportExcel(exportDeps));
 exportDataBtn.addEventListener('click', () => exportLoanDataJson(exportDeps));
-importDataBtn.addEventListener('click', () => importDataFile.click());
+importDataDirectBtn.addEventListener('click', () => {
+  importFileIntent = 'direct';
+  importDataFile.click();
+});
+importDataOptionsBtn.addEventListener('click', () => {
+  importFileIntent = 'modal';
+  importDataFile.click();
+});
 importDataFile.addEventListener('change', handleImportFileChange);
+
+saveSimulationLocalBtn.addEventListener('click', saveCurrentSimulationToLocal);
+simulationNameInput.addEventListener('input', updateSimulationNameCounter);
+simulationNameInput.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    saveCurrentSimulationToLocal();
+  }
+});
+simulationsSortSelect.addEventListener('change', () => {
+  renderSimulationsList();
+});
+
+closeImportChoiceBtn.addEventListener('click', () => setImportChoiceOpen(false));
+cancelImportChoiceBtn.addEventListener('click', () => setImportChoiceOpen(false));
+importChoiceBackdrop.addEventListener('click', () => setImportChoiceOpen(false));
+importChoiceLoadOnlyBtn.addEventListener('click', () => {
+  if (!pendingImportValidated) return;
+  applyImportedLoan(pendingImportValidated.loan, pendingImportValidated.extras);
+  setImportChoiceOpen(false);
+  showToast('Los datos del archivo se aplicaron a la calculadora.', { title: 'Simulación cargada' });
+});
+importChoiceSaveListBtn.addEventListener('click', () => {
+  if (!pendingImportValidated) return;
+  const nameCheck = validateSimulationName(importChoiceNameInput.value);
+  if (!nameCheck.ok) {
+    showToast(nameCheck.error, { title: 'Nombre inválido', variant: 'error' });
+    importChoiceNameInput.focus();
+    return;
+  }
+  try {
+    addSimulation({
+      id: newId(),
+      name: nameCheck.name,
+      createdAt: new Date().toISOString(),
+      loan: pendingImportValidated.loan,
+      extras: pendingImportValidated.extras
+    });
+    renderSimulationsList();
+    setImportChoiceOpen(false);
+    showToast('La simulación se añadió a tu lista en este navegador.', { title: 'Guardada en el navegador' });
+  } catch {
+    showToast('No se pudo guardar (p. ej. almacenamiento lleno o privado).', { title: 'Error', variant: 'error' });
+  }
+});
+importChoiceBothBtn.addEventListener('click', () => {
+  if (!pendingImportValidated) return;
+  const nameCheck = validateSimulationName(importChoiceNameInput.value);
+  if (!nameCheck.ok) {
+    showToast(nameCheck.error, { title: 'Nombre inválido', variant: 'error' });
+    importChoiceNameInput.focus();
+    return;
+  }
+  try {
+    addSimulation({
+      id: newId(),
+      name: nameCheck.name,
+      createdAt: new Date().toISOString(),
+      loan: pendingImportValidated.loan,
+      extras: pendingImportValidated.extras
+    });
+    applyImportedLoan(pendingImportValidated.loan, pendingImportValidated.extras);
+    renderSimulationsList();
+    setImportChoiceOpen(false);
+    showToast('Datos cargados y simulación guardada en la lista.', { title: 'Listo' });
+  } catch {
+    showToast('No se pudo guardar en el navegador.', { title: 'Error', variant: 'error' });
+  }
+});
+
+closeDeleteSimulationBtn.addEventListener('click', () => setDeleteSimulationOpen(false));
+cancelDeleteSimulationBtn.addEventListener('click', () => setDeleteSimulationOpen(false));
+deleteSimulationBackdrop.addEventListener('click', () => setDeleteSimulationOpen(false));
+confirmDeleteSimulationBtn.addEventListener('click', () => {
+  if (!deleteSimulationTargetId) return;
+  const sim = getSimulationById(deleteSimulationTargetId);
+  if (!sim) {
+    setDeleteSimulationOpen(false);
+    showToast('No se encontró la simulación.', { title: 'Error', variant: 'error' });
+    return;
+  }
+  if (removeSimulation(deleteSimulationTargetId)) {
+    renderSimulationsList();
+    showToast('La simulación se eliminó de este navegador.', {
+      title: 'Eliminada',
+      durationMs: 8800,
+      actionLabel: 'Deshacer',
+      onAction: () => {
+        if (restoreSimulation(sim)) {
+          renderSimulationsList();
+          showToast('Simulación restaurada en la lista.', { title: 'Listo' });
+        } else {
+          showToast('No se pudo restaurar.', { title: 'Error', variant: 'error' });
+        }
+      }
+    });
+  }
+  setDeleteSimulationOpen(false);
+});
 
 openScheduledAbonosBtn.addEventListener('click', () => setScheduledModalOpen(true));
 closeScheduledAbonosBtn.addEventListener('click', () => setScheduledModalOpen(false));
@@ -942,6 +1401,16 @@ fixedAbonoStrategy.addEventListener('change', refreshScheduledModal);
 
 document.addEventListener('keydown', (e) => {
   if (e.key !== 'Escape') return;
+  if (deleteSimulationModal.classList.contains('is-open')) {
+    e.preventDefault();
+    setDeleteSimulationOpen(false);
+    return;
+  }
+  if (importChoiceModal.classList.contains('is-open')) {
+    e.preventDefault();
+    setImportChoiceOpen(false);
+    return;
+  }
   if (scheduledReplaceConfirmModal.classList.contains('is-open')) {
     e.preventDefault();
     setScheduledReplaceConfirmOpen(false);
@@ -975,6 +1444,17 @@ currencySelect.addEventListener('change', () => {
 });
 
 render();
+try {
+  const savedSort = localStorage.getItem(SORT_STORAGE_KEY);
+  if (savedSort && simulationsSortSelect && ['date-desc', 'date-asc', 'name-asc', 'name-desc'].includes(savedSort)) {
+    simulationsSortSelect.value = savedSort;
+  }
+} catch {
+  /* ignore */
+}
+updateSimulationNameCounter();
+setupScenarioDropzone();
+renderSimulationsList();
 
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('/service-worker.js');

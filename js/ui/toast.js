@@ -7,14 +7,21 @@ const DEFAULT_DURATION_MS = 4200;
 /**
  * @param {HTMLElement | null} toastRegion
  * @param {{ durationMs?: number }} [options]
- * @returns {(message: string, opts?: { title?: string, variant?: 'success' | 'error' }) => void}
+ * @returns {(message: string, opts?: {
+ *   title?: string,
+ *   variant?: 'success' | 'error',
+ *   durationMs?: number,
+ *   actionLabel?: string,
+ *   onAction?: () => void
+ * }) => void}
  */
 export function createShowToast(toastRegion, options = {}) {
-  const durationMs = options.durationMs ?? DEFAULT_DURATION_MS;
+  const defaultDurationMs = options.durationMs ?? DEFAULT_DURATION_MS;
 
   return function showToast(message, opts = {}) {
     if (!toastRegion) return;
     const variant = opts.variant === 'error' ? 'error' : 'success';
+    const durationMs = typeof opts.durationMs === 'number' ? opts.durationMs : defaultDurationMs;
     const el = document.createElement('div');
     el.className = `toast toast--${variant}`;
     el.setAttribute('role', 'status');
@@ -29,16 +36,36 @@ export function createShowToast(toastRegion, options = {}) {
     } else {
       el.textContent = message;
     }
-    toastRegion.appendChild(el);
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => el.classList.add('toast--visible'));
-    });
-    window.setTimeout(() => {
+
+    let timeoutId = 0;
+    const removeEl = () => {
+      window.clearTimeout(timeoutId);
       el.classList.remove('toast--visible');
       el.classList.add('toast--leaving');
       window.setTimeout(() => {
         el.remove();
       }, 320);
-    }, durationMs);
+    };
+
+    if (opts.actionLabel && typeof opts.onAction === 'function') {
+      const actions = document.createElement('div');
+      actions.className = 'toast__actions';
+      const actionBtn = document.createElement('button');
+      actionBtn.type = 'button';
+      actionBtn.className = 'toast__action-btn';
+      actionBtn.textContent = opts.actionLabel;
+      actionBtn.addEventListener('click', () => {
+        opts.onAction();
+        removeEl();
+      });
+      actions.appendChild(actionBtn);
+      el.appendChild(actions);
+    }
+
+    toastRegion.appendChild(el);
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => el.classList.add('toast--visible'));
+    });
+    timeoutId = window.setTimeout(removeEl, durationMs);
   };
 }

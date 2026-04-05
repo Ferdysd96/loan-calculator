@@ -231,6 +231,24 @@ export function exportPdf(deps) {
 }
 
 /**
+ * @param {object} payload — objeto compatible con buildLoanDataPayload
+ * @param {string} filename
+ */
+export function downloadLoanPayloadJson(payload, filename) {
+  const text = JSON.stringify(payload, null, 2);
+  const blob = new Blob([text], { type: 'application/json;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.rel = 'noopener';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
+/**
  * @param {object} deps
  * @param {() => object | null} deps.getLoanPayload — resultado de buildLoanDataPayload
  */
@@ -242,17 +260,7 @@ export function exportLoanDataJson(deps) {
     return;
   }
 
-  const text = JSON.stringify(payload, null, 2);
   const fname = `prestamo-${new Date().toISOString().slice(0, 10)}.json`;
-  const blob = new Blob([text], { type: 'application/json;charset=utf-8' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = fname;
-  a.rel = 'noopener';
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  URL.revokeObjectURL(url);
+  downloadLoanPayloadJson(payload, fname);
   showToast('El archivo JSON se descargó correctamente.', { title: 'Simulación guardada' });
 }
